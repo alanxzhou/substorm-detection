@@ -1,0 +1,28 @@
+implemented
+-----------
+CNN on individual stations
+
+todo
+----
+baseline
+deal with missing data
+	potentially just restrict our data to a set of stations with a lot of data and not a lot of missing values
+	fill in our missing data
+RNN on individual stations
+Combining features
+
+How to deal with missing data?
+------------------------------
+Which stations do we use?
+	try all the stations?
+How do we fill in missing values?
+	0s?
+tensorflow data api
+
+How to combine features?
+------------------------
+threshold number of closest stations
+deep sets
+graph cnn
+rnn (need an order)
+attention (seems complicated and hard)
