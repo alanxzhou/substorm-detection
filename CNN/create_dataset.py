@@ -19,22 +19,19 @@ NOTE: NaNs are replaced with zeros
 
 import numpy as np
 import pandas as pd
-from sklearn.neighbors import KernelDensity
 import xarray as xr
-from pymap3d.vincenty import vdist
 import os
-os.chdir("C:\\Users\\Greg\\code\\space-physics-machine-learning")
-
+os.chdir("../data")
 
 T0 = 96  # length of interval to use as input data (~2 hours)
 Tfinal = 10  # length of prediction interval
 region_corners = [[-130, 45], [-60, 70]]
 
 # substorm file, make it datetime indexable
-substorms = pd.read_csv("data/substorms_2000_2018.csv")
+substorms = pd.read_csv("substorms_2000_2018.csv")
 substorms.index = pd.to_datetime(substorms.Date_UTC)
 
-all_stations = pd.read_csv("data/supermag_stations.csv", index_col=0, usecols=[0, 1, 2, 5])
+all_stations = pd.read_csv("supermag_stations.csv", index_col=0, usecols=[0, 1, 2, 5])
 statloc = all_stations.values[:, :2]
 statloc[statloc > 180] -= 360
 region_mask = ((statloc[:, 0] > region_corners[0][0]) * (statloc[:, 0] < region_corners[1][0]) *
@@ -53,7 +50,7 @@ for yr in range(2000, 2019):
     # gather substorms for the year
     ss = substorms[year]
     # gather magnetometer data for the year
-    mag_file = "./data/mag_data_{}.nc".format(year)
+    mag_file = "mag_data/mag_data_{}.nc".format(year)
     # get rid of extra columns / put the columns in the desired order
     dataset = xr.open_dataset(mag_file).sel(dim_1=['MLT', 'MLAT', 'N', 'E', 'Z'])
     stations_in_dset = [st for st in dataset]
@@ -124,4 +121,4 @@ X[np.isnan(X)] = 0
 y = np.concatenate(y, axis=0)
 
 # save the dataset
-np.savez("./data/all_stations_data.npz", X=X, y=y)
+np.savez("all_stations_data.npz", X=X, y=y)

@@ -19,38 +19,38 @@ def conv_batch_relu(**conv_params):
     return f
 
 
-def mag_block(
-    filters,
-    stage=0,
-    block=0,
-    kernel_size=[1, 7],
-    numerical_name=False,
-    stride=None,
-    freeze_bn=False
-):
-    """
-    A two-dimensional basic block.
-    :param filters: the output’s feature space
-    :param stage: int representing the stage of this block (starting from 0)
-    :param block: int representing this block (starting from 0)
-    :param kernel_size: size of the kernel
-    :param numerical_name: if true, uses numbers to represent blocks instead of chars (ResNet{101, 152, 200})
-    :param stride: int representing the stride used in the shortcut and the first conv layer, default derives stride from block id
-    :param freeze_bn: if true, freezes BatchNormalization layers (ie. no updates are done in these layers)
-    Usage:
-        >>> import keras_resnet.blocks
-        >>> keras_resnet.blocks.basic_2d(64)
-    """
+def combiner(height, **conv_params):
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+
+    def f(x):
+        ssc = keras.layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', kernel_initializer=kernel_initializer)(x)
+        ssc = keras.layers.ReLU()(ssc)
+
+        asc = keras.layers.Conv2D(filters, kernel_size=[height, 1], strides=[1, 1], padding='valid', kernel_initializer=kernel_initializer)(x)
+        asc = keras.layers.ReLU()(asc)
+
+        enlarge = keras.layers.Conv2D(filters * height, kernel_size=kernel_size, strides=strides, padding='same', kernel_initializer=kernel_initializer)(asc)
+        enlarge = keras.layers.ReLU()(enlarge)
+        enlarge = keras.layers.Reshape((height, -1, filters))(enlarge)
+
+        comb = keras.layers.Concatenate()([ssc, enlarge])
+        comb = conv_batch_relu(filters=filters, kernel_size=kernel_size)(comb)
+        return comb
+
+    return f
+
+
+def mag_block(filters, stage=0, block=0, kernel_size=[1, 7], numerical_name=False, stride=None, freeze_bn=False):
     if stride is None:
         if block != 0 or stage == 0:
             stride = 1
         else:
             stride = [1, 2]
 
-    if keras.backend.image_data_format() == "channels_last":
-        axis = 3
-    else:
-        axis = 1
+    axis = 3
 
     if block > 0 and numerical_name:
         block_char = "b{}".format(block)
