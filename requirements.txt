@@ -1,8 +1,0 @@
-tensorflow-gpu
-matplotlib == 3.0.2
-numpy
-keras
-xarray
-pandas
-basemap
-# keras-resnet needs to be installed from master https://github.com/broadinstitute/keras-resnet.git

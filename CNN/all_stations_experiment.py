@@ -6,13 +6,14 @@ plt.style.use('ggplot')
 
 
 # CONFIGURATION
-batch_size = 64
+batch_size = 32
 epochs = 10
 class_weight = {0: 1, 1: 1}
-train_test_split = .2
-train_val_split = .1
-run_dict = {'station_conv': 1,
-            'comb_net': 1,
+train_test_split = .1
+train_val_split = .15
+run_dict = {'station_net': 1,
+            'combiner_net': 1,
+            'multistation_net': 1,
             'resnet': 0}
 model_list = []
 
@@ -33,26 +34,7 @@ print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
 print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test))
 
 # CREATE MODELS
-if run_dict['station_conv']:
-    params = {'stages': 3,
-              'blocks_per_stage': 2,
-              'kernel_width': 11,
-              'downsampling_per_stage': 2,
-              'batch_size': batch_size,
-              'epochs': epochs,
-              'flx2': True,
-              'fl_filters': 32,
-              'fl_stride': 2,
-              'fl_kernel_width': 11}
-    hist, mod = models.train_strided_station_cnn(X_train, y_train, X_val, y_val, params)
-    model_list.append({'name': 'Station Conv Net',
-                       'hist': hist,
-                       'model': mod,
-                       'test_data': (X_test, y_test),
-                       'color': 'r'})
-
-
-if run_dict['comb_net']:
+if run_dict['station_net']:
     params = {'stages': 2,
               'blocks_per_stage': 2,
               'kernel_width': 9,
@@ -62,13 +44,50 @@ if run_dict['comb_net']:
               'flx2': True,
               'fl_filters': 32,
               'fl_stride': 2,
-              'fl_kernel_width': 11}
+              'fl_kernel_width': 13}
+    hist, mod = models.train_strided_station_cnn(X_train, y_train, X_val, y_val, params)
+    model_list.append({'name': 'Station Conv Net',
+                       'hist': hist,
+                       'model': mod,
+                       'test_data': (X_test, y_test),
+                       'color': 'r'})
+
+
+if run_dict['combiner_net']:
+    params = {'stages': 3,
+              'blocks_per_stage': 1,
+              'kernel_width': 9,
+              'downsampling_per_stage': 2,
+              'batch_size': batch_size,
+              'epochs': epochs,
+              'flx2': True,
+              'fl_filters': 32,
+              'fl_stride': 2,
+              'fl_kernel_width': 13}
     hist, mod = models.train_combiner_net(X_train, y_train, X_val, y_val, params)
     model_list.append({'name': 'Combiner Net',
                        'hist': hist,
                        'model': mod,
                        'test_data': (X_test, y_test),
                        'color': 'b'})
+
+if run_dict['multistation_net']:
+    params = {'stages': 2,
+              'blocks_per_stage': 2,
+              'batch_size': batch_size,
+              'epochs': epochs,
+              'flx2': True,
+              'kernel_size': [3, 9],
+              'downsampling_strides': [1, 2],
+              'fl_filters': 32,
+              'fl_strides': [1, 2],
+              'fl_kernel_size': [3, 13]}
+    hist, mod = models.train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params)
+    model_list.append({'name': 'Multi-Station Conv Net',
+                       'hist': hist,
+                       'model': mod,
+                       'test_data': (X_test, y_test),
+                       'color': 'c'})
 
 if run_dict['resnet']:
     pass

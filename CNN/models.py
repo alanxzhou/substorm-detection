@@ -47,6 +47,48 @@ def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
     return hist, model
 
 
+def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
+    """ This network assumes that the stations are ordered such that stations nearby in position are nearby on
+    the globe. This will be similar to the regular station_cnn except the kernel will span more than 1 station
+    params:
+        stages
+        blocks_per_stage
+        downsampling_strides
+        batch_size
+        epochs
+        flx2
+        kernel_size
+        fl_filters
+        fl_strides
+        fl_kernel_size
+    """
+    model_input = keras.layers.Input(shape=X_train.shape[1:])
+    net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
+                                 strides=params['fl_strides'])(model_input)
+
+    filters = params['fl_filters']
+    if params['flx2']:
+        filters *= 2
+
+    for stage in range(params['stages']):
+        for _ in range(params['blocks_per_stage'] - 1):
+            net = blocks.conv_batch_relu(filters=filters, kernel_size=params['kernel_size'], strides=[1, 1])(net)
+        net = blocks.conv_batch_relu(filters=filters, kernel_size=params['kernel_size'],
+                                     strides=params['downsampling_strides'])(net)
+        filters *= 2
+
+    net = keras.layers.GlobalAveragePooling2D()(net)
+    model_output = keras.layers.Dense(1, activation='sigmoid')(net)
+
+    model = keras.models.Model(inputs=model_input, outputs=model_output)
+    model.compile(optimizer='adam', loss='binary_crossentropy',
+                  metrics=['accuracy', utils.true_positive, utils.false_positive])
+    hist = model.fit(X_train, y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val, y_val))
+
+    return hist, model
+
+
 def train_combiner_net(X_train, y_train, X_val, y_val, params):
     model_input = keras.layers.Input(shape=X_train.shape[1:])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=[1, params['fl_kernel_width']],

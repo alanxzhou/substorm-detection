@@ -1,0 +1,16 @@
+name: substorm-detection
+channels:
+dependencies:
+   - python=3.6
+   - tensorflow-gpu
+   - matplotlib
+   - numpy
+   - keras
+   - xarray
+   - pandas
+   - cartopy
+   - pip
+   - pip:
+       - "git+https://github.com/broadinstitute/keras-resnet@master"
+       - talos
+       - pymap3d
