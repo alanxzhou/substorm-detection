@@ -19,7 +19,7 @@ def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
         fl_stride
         fl_kernel_width
     """
-    model_input = keras.layers.Input(shape=X_train.shape[1:])
+    model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=[1, params['fl_kernel_width']],
                                  strides=[1, params['fl_stride']])(model_input)
 
@@ -41,8 +41,8 @@ def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    hist = model.fit(X_train, y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                     validation_data=(X_val, y_val))
+    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], y_val))
 
     return hist, model
 
@@ -62,7 +62,7 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
         fl_strides
         fl_kernel_size
     """
-    model_input = keras.layers.Input(shape=X_train.shape[1:])
+    model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
                                  strides=params['fl_strides'])(model_input)
 
@@ -83,14 +83,14 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    hist = model.fit(X_train, y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                     validation_data=(X_val, y_val))
+    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], y_val))
 
     return hist, model
 
 
 def train_combiner_net(X_train, y_train, X_val, y_val, params):
-    model_input = keras.layers.Input(shape=X_train.shape[1:])
+    model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=[1, params['fl_kernel_width']],
                                  strides=[1, params['fl_stride']])(model_input)
 
@@ -113,14 +113,14 @@ def train_combiner_net(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    hist = model.fit(X_train, y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                     validation_data=(X_val, y_val))
+    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], y_val))
 
     return hist, model
 
 
 def train_resnet():
-    resnet_input = keras.layers.Input(X_train.shape[1:])
+    model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     blocks = [2, 2, 2, 2]
 
     numerical_names = [True] * len(blocks)
