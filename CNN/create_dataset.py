@@ -25,7 +25,7 @@ import anneal
 import os
 os.chdir("../data")
 
-T0 = 128  # length of interval to use as input data
+T0 = 160  # length of interval to use as input data
 Tfinal = 10  # length of prediction interval
 region_corners = [[-130, 45], [-60, 70]]
 substorm_fn = "substorms_2000_2018.csv"
