@@ -107,3 +107,4 @@ venv.bak/
 /data/mag_data
 /data/solar_wind
 *.npz
+*.pkl

@@ -1,4 +1,5 @@
 import keras
+from tensorflow import errors
 from CNN import blocks
 import utils
 
@@ -41,8 +42,22 @@ def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                     validation_data=(X_val[:, :, -params['T0']:], y_val))
+    try:
+        hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                         validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
+    except errors.ResourceExhaustedError:
+        params = {'T0': 32,
+                  'stages': 1,
+                  'blocks_per_stage': 1,
+                  'kernel_width': 5,
+                  'downsampling_per_stage': 2,
+                  'batch_size': 100,
+                  'epochs': 1,
+                  'flx2': True,
+                  'fl_filters': 1,
+                  'fl_stride': 2,
+                  'fl_kernel_width': 5}
+        return train_strided_station_cnn(X_train[:100], y_train[:100], X_val[:100], y_val[:100], params)
 
     return hist, model
 
@@ -62,6 +77,7 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
         fl_strides
         fl_kernel_size
     """
+    print(params)
     model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
                                  strides=params['fl_strides'])(model_input)
@@ -83,8 +99,24 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                     validation_data=(X_val[:, :, -params['T0']:], y_val))
+    try:
+        hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                         validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
+    except errors.ResourceExhaustedError:
+        print("OUT OF MEMORY: training mini model instead, just ignore this one")
+        params = {'T0': 32,
+                  'stages': 1,
+                  'blocks_per_stage': 1,
+                  'batch_size': 100,
+                  'epochs': 1,
+                  'flx2': False,
+                  'kernel_size': [1, 3],
+                  'downsampling_strides': [1, 2],
+                  'fl_filters': 1,
+                  'fl_strides': [1, 2],
+                  'fl_kernel_size': [1, 5],
+                  'verbose': 2}
+        return train_strided_multistation_cnn(X_train[:100], y_train[:100], X_val[:100], y_val[:100], params)
 
     return hist, model
 
