@@ -18,6 +18,21 @@ def conv_batch_relu(**conv_params):
 
     return f
 
+def conv_batch_relu_1d(**conv_params):
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
+
+    def f(x):
+        conv = keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
+        bn = keras.layers.BatchNormalization()(conv)
+        relu = keras.layers.ReLU()(bn)
+        return relu
+
+    return f
 
 def combiner(height, **conv_params):
     filters = conv_params["filters"]

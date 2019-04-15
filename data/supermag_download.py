@@ -25,7 +25,7 @@ import os
 # download directory
 DOWNLOAD_DIR = "data"
 N_INTERVALS = 10
-START_YEAR = 2015
+START_YEAR = 2000
 END_YEAR = 2019
 
 MAX_TRIES = 5
@@ -75,7 +75,6 @@ def getDataForStation(data_params):
     df.index = times
     return df.drop(columns=['Date_UTC', 'IAGA'])
 
-
 def getAvailableStations(station_params):
     tries = 0
     while tries < MAX_TRIES:
@@ -97,9 +96,22 @@ def getAvailableStations(station_params):
         return
     return station_list
 
-
 def getDataForInterval(start_date, hours, minutes):
-    data = xr.Dataset()
+    """Gets data from website for all stations over an interval
+
+    Parameters
+    ----------
+    start_date: datetime
+    hours: int
+        number of hours in interval
+    minutes: int
+        minutes in interval
+    Returns
+    -------
+    data: xarray.Dataset
+        dataset with the data for all stations in the interval
+    """
+    data = {}
     
     station_params = STATION_PARAMS.copy()
     station_params['start'] = start_date.strftime(DATE_FORMAT)
@@ -108,7 +120,7 @@ def getDataForInterval(start_date, hours, minutes):
     # get stations for interval
     station_list = getAvailableStations(station_params)
     print("{} stations for interval starting {}".format(len(station_list),
-          start_date.strftime("%Y-%m-%d")))
+          start_date.strftime(DATE_FORMAT)))
     
     for station in station_list:
         data_params = DATA_PARAMS.copy()
@@ -122,8 +134,7 @@ def getDataForInterval(start_date, hours, minutes):
         df = getDataForStation(data_params)
         data[station] = df
     
-    return data
-
+    return xr.Dataset(data)
 
 def downloadDataToFile(fn, start_date, end_date, nintervals):
     dataset = xr.Dataset()
@@ -140,7 +151,6 @@ def downloadDataToFile(fn, start_date, end_date, nintervals):
     print("saving {}".format(fn))
     dataset.to_netcdf(fn)
 
-
 def downloadData():
     os.chdir(DOWNLOAD_DIR)
     for yr in range(START_YEAR, END_YEAR):
@@ -148,7 +158,6 @@ def downloadData():
         end_date = datetime(yr+1, 1, 1, 0, 0, 0)
         fn = "mag_data_{}".format(yr)
         downloadDataToFile(fn, start_date, end_date, N_INTERVALS)
-
 
 if __name__ == "__main__":
     downloadData()

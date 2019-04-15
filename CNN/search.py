@@ -26,18 +26,16 @@ print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test
 kernel_sizes = [(1, 5), (1, 7), (1, 9), (1, 11),
                 (2, 5), (2, 7), (2, 9), (2, 11),
                 (3, 5), (3, 7), (3, 9), (3, 11),
-                (4, 5), (4, 7), (4, 9), (4, 11),
-                (5, 5), (5, 7), (5, 9), (5, 11)]
+                (4, 5), (4, 7), (4, 9)]
 
 fl_kernel_sizes = [(1, 13), (1, 7), (1, 9), (1, 11),
                    (2, 13), (2, 7), (2, 9), (2, 11),
                    (3, 13), (3, 7), (3, 9), (3, 11),
-                   (4, 13), (4, 7), (4, 9), (4, 11),
-                   (5, 13), (5, 7), (5, 9), (5, 11)]
+                   (4, 7), (4, 9), (4, 11), (4, 13)]
 
 params = {'T0': [32, 64, 96, 128],
           'stages': [2, 3, 4, 5, 6],
-          'blocks_per_stage': [2, 3, 4],
+          'blocks_per_stage': [1, 2, 3],
           'batch_size': [16, 32, 64],
           'epochs': [4, 8, 12, 16],
           'flx2': [True, False],
@@ -49,4 +47,4 @@ params = {'T0': [32, 64, 96, 128],
           'verbose': [2]}
 
 ta.Scan(X_train, y_train, params=params, model=models.train_strided_multistation_cnn,
-        x_val=X_val, y_val=y_val, grid_downsample=1/720000)
+        x_val=X_val, y_val=y_val, grid_downsample=4.52e-6)

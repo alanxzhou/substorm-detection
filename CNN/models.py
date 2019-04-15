@@ -1,7 +1,7 @@
 import keras
-from tensorflow import errors
 from CNN import blocks
 import utils
+import numpy as np
 
 
 def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
@@ -42,22 +42,9 @@ def train_strided_station_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    try:
-        hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                         validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
-    except errors.ResourceExhaustedError:
-        params = {'T0': 32,
-                  'stages': 1,
-                  'blocks_per_stage': 1,
-                  'kernel_width': 5,
-                  'downsampling_per_stage': 2,
-                  'batch_size': 100,
-                  'epochs': 1,
-                  'flx2': True,
-                  'fl_filters': 1,
-                  'fl_stride': 2,
-                  'fl_kernel_width': 5}
-        return train_strided_station_cnn(X_train[:100], y_train[:100], X_val[:100], y_val[:100], params)
+
+    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
 
     return hist, model
 
@@ -77,6 +64,11 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
         fl_strides
         fl_kernel_size
     """
+    final_filters = params['fl_filters'] * 2 ** (params['stages'] + params['flx2'])
+    if final_filters > 1024:
+        params['stages'] = int(10 - np.log2(params['fl_filters']))
+    if params['T0'] == 32 and (params['stages'] + params['flx2']) > 5:
+        params['T0'] = 2 ** (params['stages'] + params['flx2'])
     print(params)
     model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
@@ -99,24 +91,94 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
     model = keras.models.Model(inputs=model_input, outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
-    try:
-        hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
-                         validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
-    except errors.ResourceExhaustedError:
-        print("OUT OF MEMORY: training mini model instead, just ignore this one")
-        params = {'T0': 32,
-                  'stages': 1,
-                  'blocks_per_stage': 1,
-                  'batch_size': 100,
-                  'epochs': 1,
-                  'flx2': False,
-                  'kernel_size': [1, 3],
-                  'downsampling_strides': [1, 2],
-                  'fl_filters': 1,
-                  'fl_strides': [1, 2],
-                  'fl_kernel_size': [1, 5],
-                  'verbose': 2}
-        return train_strided_multistation_cnn(X_train[:100], y_train[:100], X_val[:100], y_val[:100], params)
+
+    hist = model.fit(X_train[:, :, -params['T0']:], y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], y_val), verbose=params['verbose'])
+
+    return hist, model
+
+
+def train_strided_multistation_cnn_with_swdata(X_train, y_train, X_val, y_val, params):
+    """ X_train: [Mag_data, SW_data]
+    This network uses solar wind data. Basically, it's two networks, one for mag data, one for solar wind, both ending
+    with global average pooling. The outputs from both networks are concatenated and passed through a softmax
+    classifier.
+
+    params:
+        mag_T0
+        mag_stages
+        mag_blocks_per_stage
+        mag_downsampling_strides
+        mag_batch_size
+        mag_epochs
+        mag_flx2
+        mag_kernel_size
+        mag_fl_filters
+        mag_fl_strides
+        mag_fl_kernel_size
+
+        sw_T0
+        sw_stages
+        sw_blocks_per_stage
+        sw_downsampling_strides
+        sw_batch_size
+        sw_epochs
+        sw_flx2
+        sw_kernel_size
+        sw_fl_filters
+        sw_fl_strides
+        sw_fl_kernel_size
+    """
+    print(params)
+    mag_data, sw_data = X_train
+    mag_data_val, sw_data_val = X_val
+
+    # Mag Net
+    mag_input = keras.layers.Input(shape=[mag_data.shape[1], params['mag_T0'], mag_data.shape[3]])
+    mag_net = blocks.conv_batch_relu(filters=params['mag_fl_filters'], kernel_size=params['mag_fl_kernel_size'],
+                                 strides=params['mag_fl_strides'])(mag_input)
+
+    filters = params['mag_fl_filters']
+    if params['mag_flx2']:
+        filters *= 2
+
+    for stage in range(params['mag_stages']):
+        for _ in range(params['mag_blocks_per_stage'] - 1):
+            mag_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['mag_kernel_size'], strides=[1, 1])(mag_net)
+        mag_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['mag_kernel_size'],
+                                     strides=params['mag_downsampling_strides'])(mag_net)
+        filters *= 2
+    mag_net = keras.layers.GlobalAveragePooling2D()(mag_net)
+
+    # Solar Wind Net
+    sw_input = keras.layers.Input(shape=[params['sw_T0'], sw_data.shape[2]])
+    sw_net = blocks.conv_batch_relu(filters=params['sw_fl_filters'], kernel_size=params['sw_fl_kernel_size'],
+                                     strides=params['sw_fl_strides'])(sw_input)
+
+    filters = params['sw_fl_filters']
+    if params['sw_flx2']:
+        filters *= 2
+
+    for stage in range(params['sw_stages']):
+        for _ in range(params['sw_blocks_per_stage'] - 1):
+            sw_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['sw_kernel_size'], strides=[1, 1])(sw_net)
+        sw_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['sw_kernel_size'],
+                                         strides=params['sw_downsampling_strides'])(sw_net)
+        filters *= 2
+    sw_net = keras.layers.GlobalAveragePooling2D()(sw_net)
+
+    # Concatenate the two results, apply a dense layer
+    concatenation = keras.layers.Concatenate()([sw_net, mag_net])
+    model_output = keras.layers.Dense(1, activation='sigmoid')(concatenation)
+
+    model = keras.models.Model(inputs=[mag_input, sw_input], outputs=model_output)
+    model.compile(optimizer='adam', loss='binary_crossentropy',
+                  metrics=['accuracy', utils.true_positive, utils.false_positive])
+
+    train_data = [mag_data[:, :, -params['mag_T0']:], sw_data[:, -params['sw_T0']:]]
+    val_data = [mag_data_val[:, :, -params['mag_T0']:], sw_data_val[:, -params['sw_T0']:]]
+    hist = model.fit(train_data, y_train, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(val_data, y_val), verbose=params['verbose'])
 
     return hist, model
 
