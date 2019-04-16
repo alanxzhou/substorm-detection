@@ -8,7 +8,7 @@ plt.style.use('ggplot')
 # CONFIGURATION
 data_fn = "../data/all_stations_data_160.npz"
 batch_size = 16
-epochs = 5
+epochs = 50
 mag_T0 = 64
 sw_T0 = 240
 class_weight = {0: 1, 1: 1}
@@ -16,7 +16,7 @@ train_test_split = .11
 train_val_split = .15
 run_dict = {'station_net': 0,
             'combiner_net': 0,
-            'multistation_net': 1,
+            'multistation_net': 0,
             'multistation_net_with_swdata': 1,
             'resnet': 0}
 model_list = []
@@ -79,17 +79,17 @@ if run_dict['combiner_net']:
 
 if run_dict['multistation_net']:
     params = {'T0': mag_T0,
-              'stages': 2,
-              'blocks_per_stage': 2,
+              'stages': 3,
+              'blocks_per_stage': 3,
               'batch_size': batch_size,
               'epochs': epochs,
-              'flx2': True,
-              'kernel_size': [3, 9],
-              'downsampling_strides': [1, 2],
-              'fl_filters': 32,
-              'fl_strides': [1, 2],
-              'fl_kernel_size': [3, 13],
-              'verbose': 1}
+              'flx2': False,
+              'kernel_size': [3, 5],
+              'downsampling_strides': [2, 2],
+              'fl_filters': 128,
+              'fl_strides': [2, 3],
+              'fl_kernel_size': [2, 13],
+              'verbose': 2}
     hist, mod = models.train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params)
     model_list.append({'name': 'Multi-Station Conv Net' + str(mag_T0),
                        'hist': hist,
@@ -97,10 +97,10 @@ if run_dict['multistation_net']:
                        'test_data': (X_test[:, :, -mag_T0:], y_test)})
 
 if run_dict['multistation_net_with_swdata']:
-    params = {'batch_size': batch_size, 'epochs': epochs, 'verbose': 1,
-              'mag_T0': mag_T0, 'mag_stages': 2, 'mag_blocks_per_stage': 2, 'mag_downsampling_strides': [1, 2],
-              'mag_flx2': True, 'mag_kernel_size': [3, 9], 'mag_fl_filters': 32, 'mag_fl_strides': [1, 2],
-              'mag_fl_kernel_size': [1, 13],
+    params = {'batch_size': batch_size, 'epochs': epochs, 'verbose': 2,
+              'mag_T0': mag_T0, 'mag_stages': 3, 'mag_blocks_per_stage': 3, 'mag_downsampling_strides': [2, 2],
+              'mag_flx2': False, 'mag_kernel_size': [3, 5], 'mag_fl_filters': 128, 'mag_fl_strides': [2, 3],
+              'mag_fl_kernel_size': [2, 13],
 
               'sw_T0': sw_T0, 'sw_stages': 3, 'sw_blocks_per_stage': 1, 'sw_downsampling_strides': 2,
               'sw_flx2': True, 'sw_kernel_size': 9, 'sw_fl_filters': 32, 'sw_fl_strides': 2,

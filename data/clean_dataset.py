@@ -13,6 +13,7 @@ from data.supermag_download import getDataForInterval
 import pandas as pd
 
 mag_fn_pattern = "mag_data/mag_data_{}.nc"
+save_fn_pattern = "E:/mag_data_{}.nc"
 max_tries = 3
 
 for yr in range(2000, 2019):
@@ -54,4 +55,4 @@ for yr in range(2000, 2019):
 
     # Then take care of large stretches of NaNs ?
 
-    dataset.to_netcdf(mag_file)
+    dataset.to_netcdf(save_fn_pattern.format(year))

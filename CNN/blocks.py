@@ -8,7 +8,7 @@ def conv_batch_relu(**conv_params):
     strides = conv_params.setdefault("strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
     padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", keras.regularizers.l2(.001))
 
     def f(x):
         conv = keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
@@ -24,7 +24,7 @@ def conv_batch_relu_1d(**conv_params):
     strides = conv_params.setdefault("strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
     padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", keras.regularizers.l2(.001))
 
     def f(x):
         conv = keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
