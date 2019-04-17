@@ -54,6 +54,7 @@ if run_dict['station_net']:
               'verbose': 2}
     hist, mod = models.train_strided_station_cnn(X_train, y_train, X_val, y_val, params)
     model_list.append({'name': 'Station Conv Net' + str(mag_T0),
+
                        'hist': hist,
                        'model': mod,
                        'test_data': (X_test[:, :, -mag_T0:], y_test)})
