@@ -12,7 +12,8 @@ import numpy as np
 from data.supermag_download import getDataForInterval
 import pandas as pd
 
-mag_fn_pattern = "mag_data/mag_data_{}.nc"
+mag_fn_pattern = "mag_data2/mag_data_{}.nc"
+save_fn_pattern = "E:/mag_data_{}.nc"
 max_tries = 3
 
 for yr in range(2000, 2019):
@@ -35,7 +36,7 @@ for yr in range(2000, 2019):
     # First fill in missing stretches of data
     time_diffs = (np.diff(dataset.Date_UTC.values) / 1e9).astype(int)  # in seconds
     missing_times = np.argwhere((np.diff(dataset.Date_UTC.values) / 1e9).astype(int) != 60)[:, 0]
-    for idx, duration in zip(missing_times, time_diffs):
+    for idx, duration in zip(missing_times, time_diffs[missing_times]):
         start = dates[idx]
         hours = int(np.floor(duration / 3600))
         minutes = int(np.floor((duration - hours * 3600) / 60))
@@ -54,4 +55,4 @@ for yr in range(2000, 2019):
 
     # Then take care of large stretches of NaNs ?
 
-    dataset.to_netcdf(mag_file)
+    dataset.to_netcdf(save_fn_pattern.format(year))

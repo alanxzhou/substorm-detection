@@ -65,10 +65,11 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
         fl_kernel_size
     """
     final_filters = params['fl_filters'] * 2 ** (params['stages'] + params['flx2'])
-    if final_filters > 1024:
+    if final_filters > 2048:
         params['stages'] = int(10 - np.log2(params['fl_filters']))
+        params['batch_size'] = int(params['batch_size'] / 2)
     if params['T0'] == 32 and (params['stages'] + params['flx2']) > 5:
-        params['T0'] = 2 ** (params['stages'] + params['flx2'])
+        params['T0'] = int(2 ** (params['stages'] + params['flx2']))
     print(params)
     model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
     net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
@@ -146,14 +147,14 @@ def train_strided_multistation_cnn_with_swdata(X_train, y_train, X_val, y_val, p
         for _ in range(params['mag_blocks_per_stage'] - 1):
             mag_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['mag_kernel_size'], strides=[1, 1])(mag_net)
         mag_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['mag_kernel_size'],
-                                     strides=params['mag_downsampling_strides'])(mag_net)
+                                         strides=params['mag_downsampling_strides'])(mag_net)
         filters *= 2
     mag_net = keras.layers.GlobalAveragePooling2D()(mag_net)
 
     # Solar Wind Net
     sw_input = keras.layers.Input(shape=[params['sw_T0'], sw_data.shape[2]])
-    sw_net = blocks.conv_batch_relu(filters=params['sw_fl_filters'], kernel_size=params['sw_fl_kernel_size'],
-                                     strides=params['sw_fl_strides'])(sw_input)
+    sw_net = blocks.conv_batch_relu_1d(filters=params['sw_fl_filters'], kernel_size=params['sw_fl_kernel_size'],
+                                       strides=params['sw_fl_strides'])(sw_input)
 
     filters = params['sw_fl_filters']
     if params['sw_flx2']:
@@ -161,11 +162,11 @@ def train_strided_multistation_cnn_with_swdata(X_train, y_train, X_val, y_val, p
 
     for stage in range(params['sw_stages']):
         for _ in range(params['sw_blocks_per_stage'] - 1):
-            sw_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['sw_kernel_size'], strides=[1, 1])(sw_net)
-        sw_net = blocks.conv_batch_relu(filters=filters, kernel_size=params['sw_kernel_size'],
-                                         strides=params['sw_downsampling_strides'])(sw_net)
+            sw_net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=params['sw_kernel_size'], strides=[1, 1])(sw_net)
+        sw_net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=params['sw_kernel_size'],
+                                           strides=params['sw_downsampling_strides'])(sw_net)
         filters *= 2
-    sw_net = keras.layers.GlobalAveragePooling2D()(sw_net)
+    sw_net = keras.layers.GlobalAveragePooling1D()(sw_net)
 
     # Concatenate the two results, apply a dense layer
     concatenation = keras.layers.Concatenate()([sw_net, mag_net])
