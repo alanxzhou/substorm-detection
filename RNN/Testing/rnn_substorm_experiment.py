@@ -27,8 +27,33 @@ X_train, X_val, X_test = utils.rnn_format_x([X_train, X_val, X_test])
 y_train, y_val, y_test = utils.rnn_format_y([y_train,y_val,y_test])
 
 params = {
-    'epochs': 10,
+    'epochs': 20,
     'batch_size': 32
 }
 
 hist, mod = rnn_models.train_basic_gru(X_train, y_train, X_val, y_val, params)
+
+# EVALUATE MODELS
+plt.figure()
+plt.title("Loss")
+plt.plot(hist.history['loss'], '-', label='train')
+plt.plot(hist.history['val_loss'], '--', label='val')
+plt.legend()
+
+plt.figure()
+plt.title("Accuracy")
+plt.plot(hist.history['acc'],  '-', label=' rain')
+plt.plot(hist.history['val_acc'],  '--', label='val')
+plt.legend()
+
+plt.figure()
+plt.title("True Positive")
+plt.plot(hist.history['true_positive'],  '-', label='train')
+plt.plot(hist.history['val_true_positive'],  '--', label='val')
+plt.legend()
+
+plt.figure()
+plt.title("False Positive")
+plt.plot(hist.history['false_positive'],  '-', label='train')
+plt.plot(hist.history['val_false_positive'],  '--', label=' al')
+plt.legend()
