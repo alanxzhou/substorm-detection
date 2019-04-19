@@ -12,7 +12,7 @@ import numpy as np
 from data.supermag_download import getDataForInterval
 import pandas as pd
 
-mag_fn_pattern = "mag_data2/mag_data_{}.nc"
+mag_fn_pattern = "mag_data/mag_data_{}.nc"
 save_fn_pattern = "E:/mag_data_{}.nc"
 max_tries = 3
 
@@ -53,6 +53,5 @@ for yr in range(2000, 2019):
 
         dataset = xr.merge([dataset, data_for_interval])
 
-    # Then take care of large stretches of NaNs ?
-
-    dataset.to_netcdf(save_fn_pattern.format(year))
+    if missing_times.shape[0] > 0:
+        dataset.to_netcdf(save_fn_pattern.format(year))

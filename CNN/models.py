@@ -99,6 +99,73 @@ def train_strided_multistation_cnn(X_train, y_train, X_val, y_val, params):
     return hist, model
 
 
+def substorm_strength_network(X_train, y_train, X_val, y_val, params):
+    """ This network assumes that the stations are ordered such that stations nearby in position are nearby on
+    the globe. This will be similar to the regular station_cnn except the kernel will span more than 1 station
+    params:
+        stages
+        blocks_per_stage
+        downsampling_strides
+        batch_size
+        epochs
+        flx2
+        kernel_size
+        fl_filters
+        fl_strides
+        fl_kernel_size
+    """
+    final_filters = params['fl_filters'] * 2 ** (params['stages'] + params['flx2'])
+    if final_filters > 2048:
+        params['stages'] = int(10 - np.log2(params['fl_filters']))
+        params['batch_size'] = int(params['batch_size'] / 2)
+    if params['T0'] == 32 and (params['stages'] + params['flx2']) > 5:
+        params['T0'] = int(2 ** (params['stages'] + params['flx2']))
+    print(params)
+    model_input = keras.layers.Input(shape=[X_train.shape[1], params['T0'], X_train.shape[3]])
+    net = blocks.conv_batch_relu(filters=params['fl_filters'], kernel_size=params['fl_kernel_size'],
+                                 strides=params['fl_strides'])(model_input)
+
+    filters = params['fl_filters']
+    if params['flx2']:
+        filters *= 2
+
+    for stage in range(params['stages']):
+        for _ in range(params['blocks_per_stage'] - 1):
+            net = blocks.conv_batch_relu(filters=filters, kernel_size=params['kernel_size'], strides=[1, 1])(net)
+        net = blocks.conv_batch_relu(filters=filters, kernel_size=params['kernel_size'],
+                                     strides=params['downsampling_strides'])(net)
+        filters *= 2
+
+    net = keras.layers.GlobalAveragePooling2D()(net)
+
+    time_output = keras.layers.Dense(params['n_classes'])(net)
+    if params['n_classes'] == 1:
+        time_output = keras.layers.Activation('sigmoid', name='time_output')(time_output)
+        losses = {'time_output': 'binary_crossentropy', 'strength_output': 'mse'}
+        metrics = {'time_output': ['accuracy', utils.true_positive, utils.false_positive],
+                   'strength_output': ['mse', 'mae']}
+    else:
+        time_output = keras.layers.Activation('softmax', name='time_output')(time_output)
+        losses = {'time_output': 'sparse_categorical_crossentropy', 'strength_output': 'mse'}
+        metrics = {'time_output': ['accuracy'], 'strength_output': ['mse', 'mae']}
+
+    strength_output = keras.layers.Dense(1, name='strength_output')(net)
+
+    model = keras.models.Model(inputs=model_input, outputs=[time_output, strength_output])
+
+    loss_weights = {'time_output': 100000, 'strength_output': 1}
+
+    model.compile(optimizer='adam', loss=losses, loss_weights=loss_weights, metrics=metrics)
+
+    y = {'time_output': y_train[0], 'strength_output': y_train[1]}
+    val = {'time_output': y_val[0], 'strength_output': y_val[1]}
+
+    hist = model.fit(X_train[:, :, -params['T0']:], y, batch_size=params['batch_size'], epochs=params['epochs'],
+                     validation_data=(X_val[:, :, -params['T0']:], val), verbose=params['verbose'])
+
+    return hist, model
+
+
 def train_strided_multistation_cnn_with_swdata(X_train, y_train, X_val, y_val, params):
     """ X_train: [Mag_data, SW_data]
     This network uses solar wind data. Basically, it's two networks, one for mag data, one for solar wind, both ending
