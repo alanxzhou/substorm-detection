@@ -45,6 +45,11 @@ def false_positive(y_true, y_pred):
 
 
 def rnn_format_x(list_of_x):
+    """
+    reformats feature arrays to match input dimensions for RNNs
+    :param list_of_x: list of feature arrays (e.g., X_train, X_val, etc.)
+    :return: list of reshaped feature arrays
+    """
     x_rnn = []
     for i in range(len(list_of_x)):
         a0, a1, a2, a3 = np.shape(list_of_x[i])
@@ -53,6 +58,11 @@ def rnn_format_x(list_of_x):
 
 
 def rnn_format_y(list_of_y):
+    """
+    reformats labels into onehot encoding for rnn inputs
+    :param list_of_y: list of label arrays (e.g., y_train, y_val, etc.)
+    :return: y_rnn: list of label arrays in onehot encoding
+    """
     label_encoder = LabelEncoder()
     onehot_encoder = OneHotEncoder(sparse=False)
     y_rnn = []
@@ -61,3 +71,16 @@ def rnn_format_y(list_of_y):
         integer_encoded = integer_encoded.reshape(len(integer_encoded), 1)
         y_rnn.append(onehot_encoder.fit_transform(integer_encoded))
     return y_rnn
+
+
+def linear_format_x(list_of_x):
+    """
+    reformats list of feature arrays for lienar classification
+    :param list_of_x: list of feature arrays (e.g., X_train, X_val, etc.)
+    :return: x_linear: list of feature arrays
+    """
+    x_linear = []
+    for i in range(len(list_of_x)):
+        a0, a1, a2, a3 = np.shape(list_of_x[i])
+        x_linear.append(np.reshape(list_of_x[i], (a0, a1*a2*a3)))
+    return x_linear
