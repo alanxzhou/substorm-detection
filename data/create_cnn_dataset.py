@@ -8,9 +8,10 @@ network has examples of predicting substorms scattered throughout the hour long 
 2 hours of magnetometer data before the prediction interval and creates an input example:
 x = (all stations x 128 minutes of mag data x 3 magnetic field components), y = 1.
 
-The script also creates 2 time related labels, the first is a scalar and represents the portion of the way through
-the hour long interval the substorm occurs (0 - 1), and the other treats each minute of the prediction interval as
-a separate class and one-hot encodes the substorm time.
+OBJECTIVES:
+    - 0/1 substorm/no substorm
+    - multiclass for [no substorm, substorm in first 5 min, next 5 min, etc...]
+    - strength (maximum SME over a window)
 
 For the negative classes, just select a time index which has no substorm.
 
@@ -23,19 +24,30 @@ import xarray as xr
 from pymap3d.vincenty import vdist
 import anneal
 
-T0 = 160  # length of interval to use as input data
-Tfinal = 10  # length of prediction interval
+use_swind = True
+
+T0 = 64  # length of interval to use as input data
+Tfinal = 20  # length of prediction interval
 swind_T0 = 256  # minutes
 region_corners = [[-130, 45], [-60, 70]]
+window = 20
+n_pos_classes = 4
+min_per_class = Tfinal / n_pos_classes
+
 substorm_fn = "substorms_2000_2018.csv"
+sme_fn = "SME.csv"
 stations_fn = "supermag_stations.csv"
 solar_wind_fn = "solar_wind.pkl"
-output_fn = "all_stations_data_{}.npz".format(T0)
+output_fn = "binary_task_data{}.npz".format(T0)
 mag_fn_pattern = "mag_data/mag_data_{}.nc"
 
 # open substorm file, make it datetime indexable
 substorms = pd.read_csv(substorm_fn, index_col=0)
 substorms.index = pd.to_datetime(substorms.index)
+
+# open SME file
+sme = pd.read_csv(sme_fn, index_col=0)
+sme.index = pd.to_datetime(sme.index)
 
 # open stations file, filter out stations not in the correct region
 all_stations = pd.read_csv(stations_fn, index_col=0, usecols=[0, 1, 2, 5])
@@ -53,6 +65,7 @@ solar_wind = pd.read_pickle(solar_wind_fn)
 X = []
 SW = []
 y = []
+strength = []
 
 # collecting dataset stats
 total_substorms = 0
@@ -67,6 +80,7 @@ for yr in range(2000, 2019):
     X_yr = []
     SW_yr = []
     y_yr = []
+    strength_yr = []
     year = str(yr)
 
     # gather substorms for the year
@@ -94,11 +108,8 @@ for yr in range(2000, 2019):
         ss_loc = ss.iloc[i][["MLT", "MLAT"]].astype(float)
         # substorm date
         date = np.datetime64(ss.index[i])
-        # minute within the prediction interval at which the substorm takes place
-        ss_interval_index = np.random.randint(0, Tfinal)
         # index within the entire year's worth of data that the substorm takes place
         ss_date_index = np.argmax(date == dates)
-
         # check if substorm within region
         region_check = data[:, ss_date_index, :2] - ss_loc[None, :]
         # filter out nans from check
@@ -110,27 +121,35 @@ for yr in range(2000, 2019):
             continue
 
         # if the substorm occurs too early in the year (before T0 + substorm interval index), skip this substorm
-        if ss_date_index - ss_interval_index - max(swind_T0, T0) < 0:
+        if ss_date_index - Tfinal - max(swind_T0, T0) < 0:
             print("Not enough mag data", ss.index[i], ss_date_index, ss_loc.ravel())
             n_no_mag_data += 1
             continue
 
-        # gather up the magnetometer data for the input interval
-        mag_data = data[:, ss_date_index - ss_interval_index - T0:ss_date_index - ss_interval_index, 2:]
+        for j in range(n_pos_classes):
+            # minute within the prediction interval at which the substorm takes place
+            ss_interval_index = np.random.randint(j * min_per_class, (j + 1) * min_per_class)
 
-        # gather solar wind data
-        sw_ss_index = np.argmax(date == solar_wind.index)
-        sw_data = solar_wind.iloc[sw_ss_index - ss_interval_index - swind_T0:sw_ss_index - ss_interval_index]
+            # gather up the magnetometer data for the input interval
+            mag_data = data[:, ss_date_index - ss_interval_index - T0:ss_date_index - ss_interval_index, 2:]
 
-        # add this example to this years data buffer
-        X_yr.append(mag_data)
-        SW_yr.append(sw_data.values)
-        y_yr.append(1)
+            if use_swind:
+                # gather solar wind data
+                sw_ss_index = np.argmax(date == solar_wind.index)
+                sw_data = solar_wind.iloc[sw_ss_index - ss_interval_index - swind_T0:sw_ss_index - ss_interval_index]
+                SW_yr.append(sw_data.values)
+
+            # add this example to this years data buffer
+            X_yr.append(mag_data)
+            y_yr.append(j + 1)
+
+            sme_idx = np.argmax(sme.index == ss.index[i])
+            strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
 
         kept_storms += 1
 
     # make sure to create equal number of positive and negative examples
-    n_positive_examples = len(X_yr)
+    n_positive_examples = len(X_yr) // n_pos_classes
     print("{} substorms from {}".format(n_positive_examples, yr))
     while len(X_yr) < 2 * n_positive_examples:
         # choose a random data during the year
@@ -140,17 +159,22 @@ for yr in range(2000, 2019):
             continue
         # collect the magnetometer data for this interval
         mag_data = data[:, random_date_index - T0:random_date_index, 2:]
-        offset = np.argmax(dates[random_date_index] == solar_wind.index)
-        sw_data = solar_wind.iloc[offset - swind_T0:offset].values
+        if use_swind:
+            offset = np.argmax(dates[random_date_index] == solar_wind.index)
+            sw_data = solar_wind.iloc[offset - swind_T0:offset].values
+            SW_yr.append(sw_data)
         # add the negative examples to this years data buffer
         X_yr.append(mag_data)
-        SW_yr.append(sw_data)
         y_yr.append(0)
+        sme_idx = np.argmax(dates[random_date_index] == sme.index)
+        strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
 
     # add this years data buffer to the overall data buffers
     X.append(np.stack(X_yr, axis=0))
     y.append(np.array(y_yr))
-    SW.append(np.stack(SW_yr, axis=0))
+    if use_swind:
+        SW.append(np.stack(SW_yr, axis=0))
+    strength.append((np.array(strength_yr)))
 
 # concatenate all of the data buffers into one big numpy array
 X = np.concatenate(X, axis=0)
@@ -158,7 +182,9 @@ mask = ~np.all(np.isnan(X), axis=(0, 2, 3))
 X = X[:, mask, :, :]
 X[np.isnan(X)] = 0
 y = np.concatenate(y, axis=0)
-SW = np.concatenate(SW, axis=0)
+strength = np.concatenate(strength, axis=0)
+if use_swind:
+    SW = np.concatenate(SW, axis=0)
 
 # figure out good ordering for the stations (rows)
 station_locations = station_locations[mask]
@@ -174,7 +200,10 @@ sa.anneal()
 X = X[:, sa.best_solution, :, :]
 
 # save the dataset
-np.savez(output_fn, X=X, y=y, SW=SW)
+if use_swind:
+    np.savez(output_fn, X=X, y=y, SW=SW, strength=strength)
+else:
+    np.savez(output_fn, X=X, y=y, strength=strength)
 
 print("total storms: ", total_substorms)
 print("Number skipped because of storms out of region: ", n_out_of_region, n_out_of_region / total_substorms)

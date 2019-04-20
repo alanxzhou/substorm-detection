@@ -3,6 +3,7 @@ import keras.backend as K
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 
+
 def split_data(list_of_data, split, random=True, rnn_format=False):
     """this function splits a list of equal length (first dimension) data arrays into two lists. The length of the data
     put into the second list is determined by the 'split' argument. This can be used for slitting [X, y] into

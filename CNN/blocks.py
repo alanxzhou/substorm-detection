@@ -8,10 +8,11 @@ def conv_batch_relu(**conv_params):
     strides = conv_params.setdefault("strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
     padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", keras.regularizers.l2(.001))
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
 
     def f(x):
-        conv = keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
+        conv = keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                                   kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
         bn = keras.layers.BatchNormalization()(conv)
         relu = keras.layers.ReLU()(bn)
         return relu
@@ -24,10 +25,11 @@ def conv_batch_relu_1d(**conv_params):
     strides = conv_params.setdefault("strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
     padding = conv_params.setdefault("padding", "same")
-    kernel_regularizer = conv_params.setdefault("kernel_regularizer", keras.regularizers.l2(.001))
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
 
     def f(x):
-        conv = keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding, kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
+        conv = keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                                   kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(x)
         bn = keras.layers.BatchNormalization()(conv)
         relu = keras.layers.ReLU()(bn)
         return relu
@@ -41,13 +43,16 @@ def combiner(height, **conv_params):
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
 
     def f(x):
-        ssc = keras.layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same', kernel_initializer=kernel_initializer)(x)
+        ssc = keras.layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same',
+                                  kernel_initializer=kernel_initializer)(x)
         ssc = keras.layers.ReLU()(ssc)
 
-        asc = keras.layers.Conv2D(filters, kernel_size=[height, 1], strides=[1, 1], padding='valid', kernel_initializer=kernel_initializer)(x)
+        asc = keras.layers.Conv2D(filters, kernel_size=[height, 1], strides=[1, 1], padding='valid',
+                                  kernel_initializer=kernel_initializer)(x)
         asc = keras.layers.ReLU()(asc)
 
-        enlarge = keras.layers.Conv2D(filters * height, kernel_size=kernel_size, strides=strides, padding='same', kernel_initializer=kernel_initializer)(asc)
+        enlarge = keras.layers.Conv2D(filters * height, kernel_size=kernel_size, strides=strides, padding='same',
+                                      kernel_initializer=kernel_initializer)(asc)
         enlarge = keras.layers.ReLU()(enlarge)
         enlarge = keras.layers.Reshape((height, -1, filters))(enlarge)
 

@@ -6,9 +6,9 @@ plt.style.use('ggplot')
 
 
 # CONFIGURATION
-data_fn = "../data/all_stations_data_160.npz"
+data_fn = "../data/data64.npz"
 batch_size = 16
-epochs = 50
+epochs = 12
 mag_T0 = 64
 sw_T0 = 240
 class_weight = {0: 1, 1: 1}
@@ -17,7 +17,8 @@ train_val_split = .15
 run_dict = {'station_net': 0,
             'combiner_net': 0,
             'multistation_net': 0,
-            'multistation_net_with_swdata': 1,
+            'multistation_net_with_swdata': 0,
+            'strength_net': 1,
             'resnet': 0}
 model_list = []
 
@@ -25,14 +26,15 @@ model_list = []
 data = np.load(data_fn)
 X = data['X']
 y = data['y'][:, None]
-sw_data = data['SW']
+# sw_data = data['SW']
+strength = data['strength']
 
 # create train, val and test sets
-train, test = utils.split_data([X, y, sw_data], train_test_split, random=False)
+train, test = utils.split_data([X, y, strength], train_test_split, random=False)
 train, val = utils.split_data(train, train_val_split, random=True)
-X_train, y_train, sw_data_train = train
-X_val, y_val, sw_data_val = val
-X_test, y_test, sw_data_test = test
+X_train, y_train, strength_train = train
+X_val, y_val, strength_val = val
+X_test, y_test, strength_test = test
 
 print("X train shape:", X_train.shape, "proportion of substorms: ", np.mean(y_train))
 print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
@@ -54,7 +56,6 @@ if run_dict['station_net']:
               'verbose': 2}
     hist, mod = models.train_strided_station_cnn(X_train, y_train, X_val, y_val, params)
     model_list.append({'name': 'Station Conv Net' + str(mag_T0),
-
                        'hist': hist,
                        'model': mod,
                        'test_data': (X_test[:, :, -mag_T0:], y_test)})
@@ -97,8 +98,28 @@ if run_dict['multistation_net']:
                        'model': mod,
                        'test_data': (X_test[:, :, -mag_T0:], y_test)})
 
+if run_dict['strength_net']:
+    params = {'T0': mag_T0,
+              'stages': 3,
+              'blocks_per_stage': 3,
+              'batch_size': batch_size,
+              'epochs': epochs,
+              'flx2': False,
+              'kernel_size': [3, 5],
+              'downsampling_strides': [2, 2],
+              'fl_filters': 128,
+              'fl_strides': [2, 3],
+              'fl_kernel_size': [2, 13],
+              'n_classes': 4,
+              'verbose': 2}
+    hist, mod = models.substorm_strength_network(X_train, [y_train, strength_train], X_val, [y_val, strength_val], params)
+    model_list.append({'name': 'StrengthNet' + str(mag_T0),
+                       'hist': hist,
+                       'model': mod,
+                       'test_data': (X_test[:, :, -mag_T0:], {'time_output': y_test, 'strength_output': strength_test})})
+
 if run_dict['multistation_net_with_swdata']:
-    params = {'batch_size': batch_size, 'epochs': epochs, 'verbose': 2,
+    params = {'batch_size': batch_size, 'epochs': 8, 'verbose': 2,
               'mag_T0': mag_T0, 'mag_stages': 3, 'mag_blocks_per_stage': 3, 'mag_downsampling_strides': [2, 2],
               'mag_flx2': False, 'mag_kernel_size': [3, 5], 'mag_fl_filters': 128, 'mag_fl_strides': [2, 3],
               'mag_fl_kernel_size': [2, 13],
@@ -165,6 +186,7 @@ for model in model_list:
 for model in model_list:
     print(model['name'])
     print(model['model'].summary())
+    model['model'].save("saved models/{}.h5".format(model['name']))
     print()
 
 for model in model_list:
