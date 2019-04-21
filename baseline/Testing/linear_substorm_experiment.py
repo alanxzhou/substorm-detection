@@ -21,9 +21,8 @@ train, val = utils.split_data(train, train_val_split, random=True, rnn_format=Tr
 X_train, y_train = train
 X_val, y_val = val
 X_test, y_test = test
-print(np.shape(X_train))
 X_train, X_val, X_test = utils.linear_format_x([X_train, X_val, X_test])
-print(np.shape(X_train))
 # train
-score = linear_models.train_logistic_regression(X_train, y_train, X_val, y_val, params)
+score, history = linear_models.train_logistic_regression(X_train, y_train, X_val, y_val, params)
 print(score)
+print(history)

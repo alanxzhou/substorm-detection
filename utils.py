@@ -22,12 +22,6 @@ def split_data(list_of_data, split, random=True, rnn_format=False):
     for data in list_of_data:
         split_a.append(data[idx[:split_idx]])
         split_b.append(data[idx[split_idx:]])
-    """
-    if rnn_format:
-        a0,a1,a2,a3 = np.shape(split_a)
-        
-        split_a = np.reshape(split_a,(a0,a2,a1*a3))
-    """
     return split_a, split_b
 
 
@@ -75,7 +69,7 @@ def rnn_format_y(list_of_y):
 
 def linear_format_x(list_of_x):
     """
-    reformats list of feature arrays for lienar classification
+    reformats list of feature arrays for linear classification
     :param list_of_x: list of feature arrays (e.g., X_train, X_val, etc.)
     :return: x_linear: list of feature arrays
     """
