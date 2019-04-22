@@ -1,0 +1,8 @@
+- train network on only solar wind data (to verify predictive power)
+- add solar wind data to full model
+- predict location / strength
+- CNN architectures?
+- Attention architecture?
+- presentation
+- paper
+	- should think about what kind of plots we want to show
