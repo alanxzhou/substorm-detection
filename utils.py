@@ -1,5 +1,6 @@
 import numpy as np
 import keras.backend as K
+from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 
@@ -36,6 +37,14 @@ def false_positive(y_true, y_pred):
     y_pos = K.round(y_true[:, 0])
     y_neg = 1 - y_pos
     return K.sum(y_pred_pos * y_neg) / (K.sum(y_neg) + K.epsilon())
+
+
+def confusion_mtx(y_true, y_pred):
+    y_true = np.ravel(np.array(y_true))
+    y_pred = np.ravel(np.array(y_pred))
+    cm = confusion_matrix(y_true, y_pred, labels=[1, 0])
+    cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+    return cm
 
 
 def rnn_format_x(list_of_x):
@@ -78,3 +87,16 @@ def linear_format_x(list_of_x):
         a0, a1, a2, a3 = np.shape(list_of_x[i])
         x_linear.append(np.reshape(list_of_x[i], (a0, a1*a2*a3)))
     return x_linear
+
+
+def linear_format_y(list_of_y):
+    """
+    reformats list of label arrays for linear classification
+    :param list_of_y: list of feature arrays (e.g., y_train, y_val, etc.)
+    :return: x_linear: list of feature arrays
+    """
+    y_linear = []
+    for i in range(len(list_of_y)):
+        y_linear.append(np.ravel(list_of_y[i]))
+    return y_linear
+
