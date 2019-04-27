@@ -16,7 +16,7 @@ mag_fn_pattern = "mag_data/mag_data_{}.nc"
 save_fn_pattern = "E:/mag_data_{}.nc"
 max_tries = 3
 
-for yr in range(2000, 2019):
+for yr in range(1990, 2019):
     print(yr)
     year = str(yr)
     # gather magnetometer data for the year

@@ -26,28 +26,32 @@ import anneal
 
 use_swind = True
 
-T0 = 64  # length of interval to use as input data
+T0 = 128  # length of interval to use as input data
 Tfinal = 20  # length of prediction interval
 swind_T0 = 256  # minutes
 region_corners = [[-130, 45], [-60, 70]]
 window = 20
-n_pos_classes = 4
+n_pos_classes = 2
+ex_per_ss = 3
 min_per_class = Tfinal / n_pos_classes
 
-substorm_fn = "substorms_2000_2018.csv"
+substorm_fn = "substorms.csv"
 sme_fn = "SME.csv"
 stations_fn = "supermag_stations.csv"
 solar_wind_fn = "solar_wind.pkl"
-output_fn = "binary_task_data{}.npz".format(T0)
+output_fn = "{}classes_data{}_{}.npz".format(n_pos_classes+1, T0, ['withoutsw', 'withsw'][use_swind])
 mag_fn_pattern = "mag_data/mag_data_{}.nc"
 
 # open substorm file, make it datetime indexable
-substorms = pd.read_csv(substorm_fn, index_col=0)
-substorms.index = pd.to_datetime(substorms.index)
+substorms = pd.read_csv(substorm_fn)
+substorms.index = pd.to_datetime(substorms['Date_UTC'])
+substorms = substorms.drop(columns=['Unnamed: 0', 'Date_UTC'])
 
 # open SME file
-sme = pd.read_csv(sme_fn, index_col=0)
-sme.index = pd.to_datetime(sme.index)
+sme = pd.read_csv(sme_fn)
+sme.index = pd.to_datetime(sme['Date_UTC'])
+sme = sme.drop(columns=['Date_UTC', 'Unnamed: 0'])
+sme['SME'][sme['SME'] > 10000] = 0
 
 # open stations file, filter out stations not in the correct region
 all_stations = pd.read_csv(stations_fn, index_col=0, usecols=[0, 1, 2, 5])
@@ -66,6 +70,7 @@ X = []
 SW = []
 y = []
 strength = []
+date_data = []
 
 # collecting dataset stats
 total_substorms = 0
@@ -74,12 +79,13 @@ n_no_mag_data = 0
 kept_storms = 0
 
 # iterate over years
-for yr in range(2000, 2019):
+for yr in range(1990, 2019):
     print(yr)
     # buffer for this year's data, to be concatenated into a numpy array later
     X_yr = []
     SW_yr = []
     y_yr = []
+    date_data_yr = []
     strength_yr = []
     year = str(yr)
 
@@ -126,9 +132,9 @@ for yr in range(2000, 2019):
             n_no_mag_data += 1
             continue
 
-        for j in range(n_pos_classes):
+        for j in range(ex_per_ss):
             # minute within the prediction interval at which the substorm takes place
-            ss_interval_index = np.random.randint(j * min_per_class, (j + 1) * min_per_class)
+            ss_interval_index = np.random.randint(1, Tfinal)
 
             # gather up the magnetometer data for the input interval
             mag_data = data[:, ss_date_index - ss_interval_index - T0:ss_date_index - ss_interval_index, 2:]
@@ -137,13 +143,19 @@ for yr in range(2000, 2019):
                 # gather solar wind data
                 sw_ss_index = np.argmax(date == solar_wind.index)
                 sw_data = solar_wind.iloc[sw_ss_index - ss_interval_index - swind_T0:sw_ss_index - ss_interval_index]
+                if sw_data.shape != (swind_T0, 6):
+                    print("Bad SW: ", date)
+                    continue
                 SW_yr.append(sw_data.values)
+
+            sme_idx = np.argmax(sme.index == ss.index[i])
+            if sme_idx == 0:
+                print("Bad SME: ", date)
+                continue
 
             # add this example to this years data buffer
             X_yr.append(mag_data)
-            y_yr.append(j + 1)
-
-            sme_idx = np.argmax(sme.index == ss.index[i])
+            y_yr.append(ss_interval_index // min_per_class + 1)
             strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
 
         kept_storms += 1
@@ -151,7 +163,7 @@ for yr in range(2000, 2019):
     # make sure to create equal number of positive and negative examples
     n_positive_examples = len(X_yr) // n_pos_classes
     print("{} substorms from {}".format(n_positive_examples, yr))
-    while len(X_yr) < 2 * n_positive_examples:
+    while len(X_yr) < (n_pos_classes + 1) * n_positive_examples:
         # choose a random data during the year
         random_date_index = np.random.randint(max(swind_T0, T0) + Tfinal, dates.shape[0] - Tfinal)
         # skip this one if there is a substorm occurring (we are looking for negative examples here)
@@ -162,6 +174,9 @@ for yr in range(2000, 2019):
         if use_swind:
             offset = np.argmax(dates[random_date_index] == solar_wind.index)
             sw_data = solar_wind.iloc[offset - swind_T0:offset].values
+            if sw_data.shape != (swind_T0, 6):
+                print("Bad SW: ", dates[random_date_index])
+                continue
             SW_yr.append(sw_data)
         # add the negative examples to this years data buffer
         X_yr.append(mag_data)

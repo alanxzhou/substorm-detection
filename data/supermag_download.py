@@ -23,10 +23,10 @@ import os
 # CONSTANTS
 
 # download directory
-DOWNLOAD_DIR = "data"
+DOWNLOAD_DIR = "mag_data"
 N_INTERVALS = 10
-START_YEAR = 2000
-END_YEAR = 2019
+START_YEAR = 1999
+END_YEAR = 2000
 
 MAX_TRIES = 5
 SLEEP_TIME = 5

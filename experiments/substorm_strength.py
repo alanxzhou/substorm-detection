@@ -14,30 +14,23 @@ import utils
 import matplotlib.pyplot as plt
 plt.style.use("ggplot")
 
-# window = 10
-
-# substorm_fn = "../data/substorms_2000_2018.csv"
-# mag_file = "../data/mag_data2/mag_data_2000.nc"
-
-# substorms = pd.read_csv(substorm_fn, index_col=0)
-# substorms.index = pd.to_datetime(substorms.index)
-# substorms = substorms['2000']
+# ss1 = pd.read_csv("../data/substorms_1990_2000.csv", index_col=0)
+# ss1.index = pd.to_datetime(ss1.index)
+# ss2 = pd.read_csv("../data/substorms_2000_2018.csv", index_col=0)
+# ss2.index = pd.to_datetime(ss2.index)
 #
-# dataset = xr.open_dataset(mag_file).sel(dim_1=['MLT', 'MLAT', 'N', 'E', 'Z'])
-# dates = pd.to_datetime(dataset.Date_UTC.values)
-# dataset = dataset.to_array().values
-# print(len(substorms))
+# ss = pd.concat((ss1, ss2))
 #
-# ss_idx = np.argwhere(np.in1d(dates, substorms.index))[:, 0]
-# data = np.stack([dataset[:, i-window:i+window] for i in ss_idx], axis=0)
+# n_storms = []
+# for year in range(1990, 2019):
+#     n_storms.append(len(ss[str(year)]))
 #
-# strengths = -1 * np.nanmin(data[:, :, :, 2], axis=(1, 2))
-# plt.hist(strengths, 100)
+# plt.plot(n_storms)
 # plt.show()
 
-model_file = '../CNN/saved models/Multi-Station Conv Net64.h5'
+model_file = '../CNN/saved models/StrengthNet.h5'
 
-data_fn = "../data/all_stations_data_160.npz"
+data_fn = "../data/1classes_data64_withsw.npz"
 data = np.load(data_fn)
 X = data['X']
 y = data['y'][:, None]
@@ -46,17 +39,25 @@ strength = data['strength']
 
 train_test_split = .11
 train, test = utils.split_data([X, y, sw_data, strength], train_test_split, random=False)
+X_train, y_train, sw_data_train, strength_train = train
 X_test, y_test, sw_data_test, strength_test = test
 
-model: keras.models.Model = keras.models.load_model(model_file, custom_objects={'true_positive': utils.true_positive, 'false_positive': utils.false_positive})
-y_pred = model.predict(X_test[:, :, -64:, :])
+model: keras.models.Model = keras.models.load_model(model_file, custom_objects={'true_positive': utils.true_positive,
+                                                                                'false_positive': utils.false_positive})
+pred = model.predict([X_test, sw_data_test[:, -240:]])
 
 pos_mask = y_test[:, 0] == 1
-logits = np.log(y_pred[pos_mask, 0] / (1 - y_pred[pos_mask, 0]))
+logits = np.log(pred[0][pos_mask].max(axis=1) / (1 - pred[0][pos_mask].max(axis=1)))
 st = strength_test[pos_mask]
 
-plt.plot(np.log(st), logits, '.')
-plt.title("Multi-Station Conv Net64: Test")
-plt.xlabel("Log substorm strength")
-plt.ylabel("output logit")
+err = st - pred[1][pos_mask, 0]
+print(np.std(err))
+print(np.mean(err))
+plt.figure()
+plt.hist(err, 100)
+
+plt.figure()
+plt.plot(strength_test[pos_mask], pred[1][pos_mask, 0], 'b.')
+plt.plot(strength_test[~pos_mask], pred[1][~pos_mask, 0], 'r.')
+plt.plot(np.arange(2000), 'k--')
 plt.show()

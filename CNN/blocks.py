@@ -1,5 +1,5 @@
 import keras
-import keras_resnet
+import keras.backend as K
 
 
 def conv_batch_relu(**conv_params):
@@ -19,6 +19,7 @@ def conv_batch_relu(**conv_params):
 
     return f
 
+
 def conv_batch_relu_1d(**conv_params):
     filters = conv_params["filters"]
     kernel_size = conv_params["kernel_size"]
@@ -36,71 +37,93 @@ def conv_batch_relu_1d(**conv_params):
 
     return f
 
-def combiner(height, **conv_params):
+
+def bn_relu_conv(**conv_params):
     filters = conv_params["filters"]
     kernel_size = conv_params["kernel_size"]
     strides = conv_params.setdefault("strides", (1, 1))
     kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
 
     def f(x):
-        ssc = keras.layers.Conv2D(filters, kernel_size=kernel_size, strides=strides, padding='same',
-                                  kernel_initializer=kernel_initializer)(x)
-        ssc = keras.layers.ReLU()(ssc)
-
-        asc = keras.layers.Conv2D(filters, kernel_size=[height, 1], strides=[1, 1], padding='valid',
-                                  kernel_initializer=kernel_initializer)(x)
-        asc = keras.layers.ReLU()(asc)
-
-        enlarge = keras.layers.Conv2D(filters * height, kernel_size=kernel_size, strides=strides, padding='same',
-                                      kernel_initializer=kernel_initializer)(asc)
-        enlarge = keras.layers.ReLU()(enlarge)
-        enlarge = keras.layers.Reshape((height, -1, filters))(enlarge)
-
-        comb = keras.layers.Concatenate()([ssc, enlarge])
-        comb = conv_batch_relu(filters=filters, kernel_size=kernel_size)(comb)
-        return comb
+        bn = keras.layers.BatchNormalization()(x)
+        relu = keras.layers.ReLU()(bn)
+        conv = keras.layers.Conv2D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                                   kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(relu)
+        return conv
 
     return f
 
 
-def mag_block(filters, stage=0, block=0, kernel_size=[1, 7], numerical_name=False, stride=None, freeze_bn=False):
-    if stride is None:
-        if block != 0 or stage == 0:
-            stride = 1
-        else:
-            stride = [1, 2]
-
-    axis = 3
-
-    if block > 0 and numerical_name:
-        block_char = "b{}".format(block)
-    else:
-        block_char = chr(ord('a') + block)
-
-    stage_char = str(stage + 2)
+def bn_relu_conv_1d(**conv_params):
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
 
     def f(x):
-        y = keras.layers.Conv2D(filters, kernel_size, strides=stride, use_bias=False, name="res{}{}_branch2a".format(stage_char, block_char), kernel_initializer='he_normal', padding='same')(x)
+        bn = keras.layers.BatchNormalization()(x)
+        relu = keras.layers.ReLU()(bn)
+        conv = keras.layers.Conv1D(filters=filters, kernel_size=kernel_size, strides=strides, padding=padding,
+                                   kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer)(relu)
+        return conv
 
-        y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2a".format(stage_char, block_char))(y)
+    return f
 
-        y = keras.layers.Activation("relu", name="res{}{}_branch2a_relu".format(stage_char, block_char))(y)
 
-        y = keras.layers.Conv2D(filters, kernel_size, use_bias=False, name="res{}{}_branch2b".format(stage_char, block_char), kernel_initializer='he_normal', padding='same')(y)
+def res_block_2d(**conv_params):
+    filters = conv_params["filters"]
+    kernel_size = conv_params["kernel_size"]
+    strides = conv_params.setdefault("strides", (1, 1))
+    kernel_initializer = conv_params.setdefault("kernel_initializer", "he_normal")
+    padding = conv_params.setdefault("padding", "same")
+    kernel_regularizer = conv_params.setdefault("kernel_regularizer", None)
+    def f(x):
+        residual = bn_relu_conv(filters=filters, kernel_size=kernel_size, strides=strides,
+                                kernel_initializer=kernel_initializer, padding=padding,
+                                kernel_regularizer=kernel_regularizer)(x)
+        residual = bn_relu_conv(filters=filters, kernel_size=kernel_size, strides=(1, 1),
+                                kernel_initializer=kernel_initializer, padding=padding,
+                                kernel_regularizer=kernel_regularizer)(residual)
 
-        y = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch2b".format(stage_char, block_char))(y)
+        input_shape = K.int_shape(x)
+        residual_shape = K.int_shape(residual)
+        stride_width = int(round(input_shape[1] / residual_shape[1]))
+        stride_height = int(round(input_shape[2] / residual_shape[2]))
+        equal_channels = input_shape[3] == residual_shape[3]
 
-        if block == 0:
-            shortcut = keras.layers.Conv2D(filters, (1, 1), strides=stride, use_bias=False, name="res{}{}_branch1".format(stage_char, block_char), kernel_initializer='he_normal')(x)
+        shortcut = x
+        # 1 X 1 conv if shape is different. Else identity.
+        if stride_width > 1 or stride_height > 1 or not equal_channels:
+            shortcut = keras.layers.Conv2D(filters=residual_shape[3], kernel_size=(1, 1),
+                                           strides=(stride_width, stride_height), padding="valid",
+                                           kernel_initializer="he_normal")(x)
 
-            shortcut = keras_resnet.layers.BatchNormalization(axis=axis, epsilon=1e-5, freeze=freeze_bn, name="bn{}{}_branch1".format(stage_char, block_char))(shortcut)
-        else:
-            shortcut = x
+        return keras.layers.Add()([shortcut, residual])
 
-        y = keras.layers.Add(name="res{}{}".format(stage_char, block_char))([y, shortcut])
+    return f
 
-        y = keras.layers.Activation("relu", name="res{}{}_relu".format(stage_char, block_char))(y)
 
-        return y
+def res_block_1d(**conv_params):
+
+    def f(x):
+        F = bn_relu_conv_1d(**conv_params)(x)
+        F = bn_relu_conv_1d(**conv_params)(F)
+
+        input_shape = K.int_shape(x)
+        residual_shape = K.int_shape(F)
+        stride_width = int(round(input_shape[1] / residual_shape[1]))
+        equal_channels = input_shape[2] == residual_shape[2]
+
+        shortcut = x
+        # 1 X 1 conv if shape is different. Else identity.
+        if stride_width > 1 or not equal_channels:
+            shortcut = keras.layers.Conv1D(filters=residual_shape[2], kernel_size=1, strides=stride_width,
+                                           padding="valid", kernel_initializer="he_normal")(x)
+
+        return keras.layers.Add()([shortcut, F])
 
     return f

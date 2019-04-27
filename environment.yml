@@ -9,6 +9,7 @@ dependencies:
    - xarray
    - pandas
    - cartopy
+   - scikit-learn
    - pip
    - pip:
        - "git+https://github.com/broadinstitute/keras-resnet@master"
