@@ -1,18 +1,37 @@
 import numpy as np
-from keras.layers import GRU, LSTM, RNN, Input, Dense
-from keras.models import Sequential Model
+from keras.layers import GRU, LSTM, RNN, Input, Dense, concatenate
+from keras.models import Sequential, Model
 import utils
 
 def train_functional_gru(X_train, y_train, X_val, y_val, params):
-    _, n_steps, n_features = np.shape(X_train)
-    main_input = Input(batch_shape=[params['batch_size'], n_steps, n_features])
-    recurrent = GRU(params['rnn_hidden_units'], return_sequences=True)(main_input)
+
+    if isinstance(X_train, list):
+        SW = True
+        mag_data, sw_data = X_train
+        mag_data_val, sw_data_val = X_val
+
+    _, n_steps_mag, n_features_mag = np.shape(mag_data)
+    _, n_steps_sw, n_features_sw = np.shape(sw_data)
+
+    # magnetic field input
+    mag_input = Input(batch_shape=[params['batch_size'], n_steps_mag, n_features_mag])
+    recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True)(mag_input)
     for i in range(params['n_stacks']-1):
-        recurrent = GRU(params['rnn_hidden_units'], return_sequences=True)(recurrent)
+        recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True)(recurrent_mag)
+
+    # solar wind input
+    sw_input = Input(batch_shape =[params['batch_size'], n_steps_sw, n_features_sw])
+    recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True)(mag_input)
+    for i in range(params['n_stacks']-1):
+        recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
+
+    # recombining
+    recurrent = concatenate([recurrent_mag, recurrent_sw])
     x = Dense(params['fc_hidden_size'], activation='relu')(recurrent)
     model_output = Dense(1, activation='sigmoid')(x)
 
-    model = Model(inputs=main_input,outputs=model_output)
+
+    model = Model(inputs=[mag_input, sw_input],outputs=model_output)
     model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy', utils.true_positive, utils.false_positive])
 
