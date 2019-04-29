@@ -86,6 +86,7 @@ for _ in range(N):
         print()
         print(_)
         print(ii)
+        print(_params)
 
         # run
         hist, mod = models.train_cnn(train_data, [y_train, strength_train], val_data, [y_val, strength_val], _params)
@@ -114,7 +115,9 @@ for _ in range(N):
         result['params'] = _params
         result['regression_results'] = regression_results
         all_results.append(result)
-        print(result)
+        print(result['evaluation'])
+        print(result['confusion_matrix'])
+        print(result['regression_results'])
 
         del mod
         del hist

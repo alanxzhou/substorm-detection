@@ -1,6 +1,7 @@
 import keras
 from CNN import blocks
 import utils
+import keras.backend as K
 
 
 def train_cnn(X_train, y_train, X_val, y_val, params):
@@ -128,7 +129,9 @@ def _residual_2d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_
 
         net = keras.layers.BatchNormalization()(net)
         net = keras.layers.ReLU()(net)
-        return keras.layers.GlobalAveragePooling2D()(net)
+        feature_pooling = keras.layers.GlobalAveragePooling2D()(net)
+        time_pooling = keras.layers.Lambda(lambda u: K.max(u, axis=(1, 3)))(net)
+        return keras.layers.Concatenate()([feature_pooling, time_pooling])
 
     return f
 
@@ -148,6 +151,8 @@ def _residual_1d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_
 
         net = keras.layers.BatchNormalization()(net)
         net = keras.layers.ReLU()(net)
-        return keras.layers.GlobalAveragePooling1D()(net)
+        feature_pooling = keras.layers.GlobalAveragePooling1D()(net)
+        time_pooling = keras.layers.Lambda(lambda u: K.max(u, axis=2))(net)
+        return keras.layers.Concatenate()([feature_pooling, time_pooling])
 
     return f
