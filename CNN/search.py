@@ -7,7 +7,7 @@ import pickle
 
 
 # CONFIGURATION
-n_classes = 3
+n_classes = 2
 data_fn = "../data/{}classes_data128_withsw.npz".format(n_classes)
 results_fn = "search_results_{}classes.pkl".format(n_classes)
 N = 100

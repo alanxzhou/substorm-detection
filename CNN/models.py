@@ -116,7 +116,7 @@ def _basic_1d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_sta
 
         for stage in range(stages):
             for _ in range(blocks_per_stage - 1):
-                net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=[1, 1])(net)
+                net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=1)(net)
             net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=strides)(net)
             filters *= 2
         return keras.layers.GlobalAveragePooling1D()(net)
