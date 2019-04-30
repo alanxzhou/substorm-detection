@@ -5,7 +5,7 @@ import numpy as np
 import utils
 
 
-def train_functional_gru(X_train, y_train, X_val, y_val, params):
+def train_functional_gru_combined(X_train, y_train, X_val, y_val, params):
 
     if isinstance(X_train, list):
         SW = True
