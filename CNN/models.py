@@ -33,16 +33,26 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
         mag_data_val = X_val
 
     mag_input = keras.layers.Input(shape=[mag_data.shape[1], params['mag_T0'], mag_data.shape[-1]])
-    mag_net = _residual_2d_net(params['mag_fl_filters'], params['mag_fl_kernel_size'], params['mag_fl_strides'],
-                               params['mag_stages'], params['mag_blocks_per_stage'], params['mag_kernel_size'],
-                               params['mag_downsampling_strides'])(mag_input)
+    if params['mag_type'] == 'residual':
+        mag_net = _residual_2d_net(params['mag_fl_filters'], params['mag_fl_kernel_size'], params['mag_fl_strides'],
+                                   params['mag_stages'], params['mag_blocks_per_stage'], params['mag_kernel_size'],
+                                   params['mag_downsampling_strides'])(mag_input)
+    elif params['mag_type'] == 'basic':
+        mag_net = _basic_2d_net(params['mag_fl_filters'], params['mag_fl_kernel_size'], params['mag_fl_strides'],
+                                params['mag_stages'], params['mag_blocks_per_stage'], params['mag_kernel_size'],
+                                params['mag_downsampling_strides'])(mag_input)
 
     if SW:
         # Solar Wind Net
         sw_input = keras.layers.Input(shape=[params['sw_T0'], sw_data.shape[2]])
-        sw_net = _residual_1d_net(params['sw_fl_filters'], params['sw_fl_kernel_size'], params['sw_fl_strides'],
-                                  params['sw_stages'], params['sw_blocks_per_stage'], params['sw_kernel_size'],
-                                  params['sw_downsampling_strides'])(sw_input)
+        if params['sw_type'] == 'residual':
+            sw_net = _residual_1d_net(params['sw_fl_filters'], params['sw_fl_kernel_size'], params['sw_fl_strides'],
+                                      params['sw_stages'], params['sw_blocks_per_stage'], params['sw_kernel_size'],
+                                      params['sw_downsampling_strides'])(sw_input)
+        elif params['sw_type'] == 'basic':
+            sw_net = _basic_1d_net(params['sw_fl_filters'], params['sw_fl_kernel_size'], params['sw_fl_strides'],
+                                   params['sw_stages'], params['sw_blocks_per_stage'], params['sw_kernel_size'],
+                                   params['sw_downsampling_strides'])(sw_input)
         # Concatenate the two results, apply a dense layer
         last_layer = keras.layers.Concatenate()([sw_net, mag_net])
         inputs = [mag_input, sw_input]
@@ -106,7 +116,7 @@ def _basic_1d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_sta
 
         for stage in range(stages):
             for _ in range(blocks_per_stage - 1):
-                net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=[1, 1])(net)
+                net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=1)(net)
             net = blocks.conv_batch_relu_1d(filters=filters, kernel_size=kernel_size, strides=strides)(net)
             filters *= 2
         return keras.layers.GlobalAveragePooling1D()(net)
@@ -129,9 +139,7 @@ def _residual_2d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_
 
         net = keras.layers.BatchNormalization()(net)
         net = keras.layers.ReLU()(net)
-        feature_pooling = keras.layers.GlobalAveragePooling2D()(net)
-        time_pooling = keras.layers.Lambda(lambda u: K.max(u, axis=(1, 3)))(net)
-        return keras.layers.Concatenate()([feature_pooling, time_pooling])
+        return keras.layers.GlobalAveragePooling2D()(net)
 
     return f
 
@@ -151,8 +159,6 @@ def _residual_1d_net(fl_filters, fl_kernel_size, fl_strides, stages, blocks_per_
 
         net = keras.layers.BatchNormalization()(net)
         net = keras.layers.ReLU()(net)
-        feature_pooling = keras.layers.GlobalAveragePooling1D()(net)
-        time_pooling = keras.layers.Lambda(lambda u: K.max(u, axis=2))(net)
-        return keras.layers.Concatenate()([feature_pooling, time_pooling])
+        return keras.layers.GlobalAveragePooling1D()(net)
 
     return f

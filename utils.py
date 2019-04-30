@@ -41,6 +41,13 @@ def false_positive(y_true, y_pred):
     return K.sum(y_pred_pos * y_neg) / (K.sum(y_neg) + K.epsilon())
 
 
+def masked_mse(labels):
+    def f(y_true, y_pred):
+        return K.sum(K.square(y_true - y_pred)[labels])
+    return f
+
+
+
 def confusion_mtx(y_true, y_pred):
     y_true = np.ravel(np.array(y_true))
     y_pred = np.ravel(np.array(y_pred))
