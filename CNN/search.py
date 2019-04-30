@@ -7,8 +7,10 @@ import pickle
 
 
 # CONFIGURATION
-n_classes = 3
+n_classes = 2
 data_fn = "../data/{}classes_data128_withsw.npz".format(n_classes)
+results_fn = "search_results_{}classes.pkl".format(n_classes)
+N = 100
 train_test_split = .11
 train_val_split = .15
 
@@ -56,14 +58,12 @@ params = {'batch_size': [8, 16, 32, 64], 'epochs': [15], 'verbose': [2], 'n_clas
           'mag_downsampling_strides': [(1, 2), (2, 2), (2, 3), (3, 2), (3, 3)],
           'mag_kernel_size': kernel_sizes, 'mag_fl_filters': [16, 32, 48, 64],
           'mag_fl_strides': [(1, 2), (2, 2), (2, 3), (3, 2), (3, 3)],
-          'mag_fl_kernel_size': fl_kernel_sizes,
+          'mag_fl_kernel_size': fl_kernel_sizes, 'mag_type': ['basic', 'residual'],
 
           'sw_T0': [64, 96, 128, 160, 192, 224, 256], 'sw_stages': [1, 2, 3, 4], 'sw_blocks_per_stage': [1, 2, 3, 4],
           'sw_downsampling_strides': [2, 3, 4], 'sw_kernel_size': [5, 7, 9, 11], 'sw_fl_filters': [16, 32, 48, 64],
-          'sw_fl_strides': [2, 3, 4], 'sw_fl_kernel_size': [5, 7, 9, 11, 13, 15]}
+          'sw_fl_strides': [2, 3, 4], 'sw_fl_kernel_size': [5, 7, 9, 11, 13, 15], 'sw_type': ['basic', 'residual']}
 
-results_fn = "search_results.pkl"
-N = 100
 all_results = []
 for _ in range(N):
     try:
@@ -98,7 +98,10 @@ for _ in range(N):
         evaluation = mod.evaluate(test_data, [y_test, strength_test])
         names = mod.metrics_names
         [y_pred, strength_pred] = mod.predict(test_data)
-        C = metrics.confusion_matrix(y_test[:, 0], np.argmax(y_pred, axis=1))
+        if n_classes > 2:
+            C = metrics.confusion_matrix(y_test[:, 0], np.argmax(y_pred, axis=1))
+        else:
+            C = metrics.confusion_matrix(y_test[:, 0], y_pred[:, 0])
         regression_results = np.empty((_params['n_classes']+1, 2))
         regression_results[0, 0] = metrics.mean_squared_error(strength_test, strength_pred)
         regression_results[0, 1] = metrics.r2_score(strength_test, strength_pred)

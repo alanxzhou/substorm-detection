@@ -27,11 +27,11 @@ import anneal
 use_swind = True
 
 T0 = 128  # length of interval to use as input data
-Tfinal = 20  # length of prediction interval
+Tfinal = 30  # length of prediction interval
 swind_T0 = 256  # minutes
 region_corners = [[-130, 45], [-60, 70]]
 window = 20
-n_pos_classes = 2
+n_pos_classes = 1
 ex_per_ss = 3
 min_per_class = Tfinal / n_pos_classes
 
@@ -170,6 +170,11 @@ for yr in range(1990, 2019):
         if len(ss.iloc[random_date_index: random_date_index+Tfinal]) != 0:
             continue
         # collect the magnetometer data for this interval
+        mlt = data[:, random_date_index - T0:random_date_index, 0]
+        mlt = mlt[np.isfinite(mlt)]
+        region_check = np.logical_or(mlt > 18, mlt < 6).sum(axis=0).min()
+        if not region_check:
+            continue
         mag_data = data[:, random_date_index - T0:random_date_index, 2:]
         if use_swind:
             offset = np.argmax(dates[random_date_index] == solar_wind.index)
