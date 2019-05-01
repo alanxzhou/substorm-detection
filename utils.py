@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.utils.multiclass import unique_labels
 
 
-def split_data(list_of_data, split, random=True, rnn_format=False):
+def split_data(list_of_data, split, random=True, batch_size=None):
     """this function splits a list of equal length (first dimension) data arrays into two lists. The length of the data
     put into the second list is determined by the 'split' argument. This can be used for slitting [X, y] into
     [X_train, y_train] and [X_val, y_val]
@@ -25,6 +25,19 @@ def split_data(list_of_data, split, random=True, rnn_format=False):
     for data in list_of_data:
         split_a.append(data[idx[:split_idx]])
         split_b.append(data[idx[split_idx:]])
+
+    if batch_size:
+        for i in range(len(split_a)):
+            if i == 0:
+                n_samples_a = np.shape(split_a[i])[0]
+                n_samples_b = np.shape(split_b[i])[0]
+
+                remainder_a = n_samples_a % batch_size
+                remainder_b = n_samples_b % batch_size
+
+            split_a[i] = split_a[i][:-remainder_a]
+            split_b[i] = split_b[i][:-remainder_b]
+
     return split_a, split_b
 
 

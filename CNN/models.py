@@ -21,7 +21,7 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
               'sw_fl_kernel_size': 13}
     """
     if params['n_classes'] < 2:
-        raise Exception("Neet at least 2 classes")
+        raise Exception("Need at least 2 classes")
 
     SW = False
     if isinstance(X_train, list):
