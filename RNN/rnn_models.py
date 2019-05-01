@@ -1,5 +1,5 @@
 import keras
-from keras.layers import GRU, LSTM, RNN, Input, Dense, concatenate, Flatten, Conv1D, MaxPooling1D
+from keras.layers import GRU, LSTM, SimpleRNN, Input, Dense, concatenate, Flatten, Conv1D, MaxPooling1D
 from keras.models import Sequential, Model
 import numpy as np
 import utils
@@ -124,13 +124,13 @@ def stacked_rnn_layer(params, mag_input, sw_input, sw_downsample=2):
             recurrent_sw = LSTM(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
 
     elif params['rnn_type'].upper() == 'RNN':
-        recurrent_mag = RNN(params['rnn_hidden_units'], return_sequences=True)(mag_input)
+        recurrent_mag = SimpleRNN(params['rnn_hidden_units'], return_sequences=True)(mag_input)
         for i in range(params['n_stacks']-1):
-            recurrent_mag = RNN(params['rnn_hidden_units'], return_sequences=True)(recurrent_mag)
+            recurrent_mag = SimpleRNN(params['rnn_hidden_units'], return_sequences=True)(recurrent_mag)
 
-        recurrent_sw = RNN(params['rnn_hidden_units'], return_sequences=True)(sw_input)
+        recurrent_sw = SimpleRNN(params['rnn_hidden_units'], return_sequences=True)(sw_input)
         for i in range(params['n_stacks'] - 1):
-            recurrent_sw = RNN(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
+            recurrent_sw = SimpleRNN(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
 
     if sw_downsample > 1:
         recurrent_sw = MaxPooling1D(pool_size=sw_downsample, strides=sw_downsample, data_format='channels_last')(recurrent_sw)
