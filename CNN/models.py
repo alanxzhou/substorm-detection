@@ -23,14 +23,8 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
     if params['n_classes'] < 2:
         raise Exception("Need at least 2 classes")
 
-
-    if params['SW']:
-        SW = True
-        mag_data, sw_data = X_train
-        mag_data_val, sw_data_val = X_val
-    else:
-        mag_data = X_train
-        mag_data_val = X_val
+    mag_data, sw_data = X_train
+    mag_data_val, sw_data_val = X_val
 
     mag_input = keras.layers.Input(shape=[mag_data.shape[1], params['mag_T0'], mag_data.shape[-1]])
     if params['mag_type'] == 'residual':
