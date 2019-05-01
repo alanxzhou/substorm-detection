@@ -70,7 +70,7 @@ X = []
 SW = []
 y = []
 strength = []
-date_data = []
+interval_index = []
 
 # collecting dataset stats
 total_substorms = 0
@@ -85,8 +85,8 @@ for yr in range(1990, 2019):
     X_yr = []
     SW_yr = []
     y_yr = []
-    date_data_yr = []
     strength_yr = []
+    interval_index_yr = []
     year = str(yr)
 
     # gather substorms for the year
@@ -156,6 +156,7 @@ for yr in range(1990, 2019):
             # add this example to this years data buffer
             X_yr.append(mag_data)
             y_yr.append(ss_interval_index // min_per_class + 1)
+            interval_index_yr.append(ss_interval_index)
             strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
 
         kept_storms += 1
@@ -188,10 +189,12 @@ for yr in range(1990, 2019):
         y_yr.append(0)
         sme_idx = np.argmax(dates[random_date_index] == sme.index)
         strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
+        interval_index_yr.append(-1)
 
     # add this years data buffer to the overall data buffers
     X.append(np.stack(X_yr, axis=0))
     y.append(np.array(y_yr))
+    interval_index.append(np.array(interval_index_yr))
     if use_swind:
         SW.append(np.stack(SW_yr, axis=0))
     strength.append((np.array(strength_yr)))
@@ -202,6 +205,7 @@ mask = ~np.all(np.isnan(X), axis=(0, 2, 3))
 X = X[:, mask, :, :]
 X[np.isnan(X)] = 0
 y = np.concatenate(y, axis=0)
+interval_index = np.concatenate(interval_index, axis=0)
 strength = np.concatenate(strength, axis=0)
 if use_swind:
     SW = np.concatenate(SW, axis=0)
@@ -221,9 +225,9 @@ X = X[:, sa.best_solution, :, :]
 
 # save the dataset
 if use_swind:
-    np.savez(output_fn, X=X, y=y, SW=SW, strength=strength)
+    np.savez(output_fn, X=X, y=y, SW=SW, strength=strength, interval_index=interval_index)
 else:
-    np.savez(output_fn, X=X, y=y, strength=strength)
+    np.savez(output_fn, X=X, y=y, strength=strength, interval_index=interval_index)
 
 print("total storms: ", total_substorms)
 print("Number skipped because of storms out of region: ", n_out_of_region, n_out_of_region / total_substorms)
