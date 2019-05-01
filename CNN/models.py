@@ -23,8 +23,8 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
     if params['n_classes'] < 2:
         raise Exception("Need at least 2 classes")
 
-    SW = False
-    if isinstance(X_train, list):
+
+    if params['SW']:
         SW = True
         mag_data, sw_data = X_train
         mag_data_val, sw_data_val = X_val
@@ -42,7 +42,7 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
                                 params['mag_stages'], params['mag_blocks_per_stage'], params['mag_kernel_size'],
                                 params['mag_downsampling_strides'])(mag_input)
 
-    if SW:
+    if params['SW']:
         # Solar Wind Net
         sw_input = keras.layers.Input(shape=[params['sw_T0'], sw_data.shape[2]])
         if params['sw_type'] == 'residual':
