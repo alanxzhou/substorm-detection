@@ -52,7 +52,7 @@ fl_kernel_sizes = [(1, 13), (1, 7), (1, 9), (1, 11),
                    (4, 7), (4, 9), (4, 11), (4, 13)]
 
 params = {'batch_size': [8, 16, 32, 64], 'epochs': [15], 'verbose': [2], 'n_classes': [n_classes],
-          'time_output_weight': [100, 1000, 10000, 100000, 1000000, 10000000 ], 'SW': [True, False],
+          'time_output_weight': [100, 1000, 10000, 100000, 1000000, 10000000], 'SW': [True, False],
 
           'mag_T0': [64, 96, 128], 'mag_stages': [1, 2, 3, 4], 'mag_blocks_per_stage': [1, 2, 3, 4],
           'mag_downsampling_strides': [(1, 2), (2, 2), (2, 3), (3, 2), (3, 3)],
