@@ -94,7 +94,10 @@ for _ in range(N):
         # evaluate
         mag_T0 = _params['mag_T0']
         sw_T0 = _params['sw_T0']
-        test_data = [X_test[:, :, -mag_T0:], SW_test[:, -sw_T0:]]
+        if _params['SW']:
+            test_data = [X_test[:, :, -mag_T0:], SW_test[:, -sw_T0:]]
+        else:
+            test_data = X_test[:, :, -mag_T0:]
         evaluation = mod.evaluate(test_data, [y_test, strength_test])
         names = mod.metrics_names
         [y_pred, strength_pred] = mod.predict(test_data)
