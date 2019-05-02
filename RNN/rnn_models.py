@@ -106,22 +106,22 @@ def train_functional_rnn_single(X_train, y_train, X_val, y_val, params):
 def stacked_rnn_layer(params, mag_input, sw_input, sw_downsample=2):
 
     if params['rnn_type'].upper() == 'GRU':
-        recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True)(mag_input)
+        recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(mag_input)
         for i in range(params['n_stacks']-1):
-            recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True)(recurrent_mag)
+            recurrent_mag = GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(recurrent_mag)
 
-        recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True)(sw_input)
+        recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(sw_input)
         for i in range(params['n_stacks'] - 1):
-            recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
+            recurrent_sw = GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(recurrent_sw)
 
     elif params['rnn_type'].upper() == 'LSTM':
-        recurrent_mag = LSTM(params['rnn_hidden_units'], return_sequences=True)(mag_input)
+        recurrent_mag = LSTM(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(mag_input)
         for i in range(params['n_stacks']-1):
-            recurrent_mag = LSTM(params['rnn_hidden_units'], return_sequences=True)(recurrent_mag)
+            recurrent_mag = LSTM(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(recurrent_mag)
 
-        recurrent_sw = LSTM(params['rnn_hidden_units'], return_sequences=True)(sw_input)
+        recurrent_sw = LSTM(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(sw_input)
         for i in range(params['n_stacks'] - 1):
-            recurrent_sw = LSTM(params['rnn_hidden_units'], return_sequences=True)(recurrent_sw)
+            recurrent_sw = LSTM(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'])(recurrent_sw)
 
     elif params['rnn_type'].upper() == 'RNN':
         recurrent_mag = SimpleRNN(params['rnn_hidden_units'], return_sequences=True)(mag_input)
@@ -155,8 +155,8 @@ def train_basic_gru(X_train, y_train, X_val, y_val, params):
     model = Sequential()
     _, n_steps, n_features = np.shape(X_train)
     for i in range(params['n_stacks']-1):
-        model.add(GRU(params['rnn_hidden_units'], return_sequences=True, input_shape=(n_steps, n_features)))
-    model.add(GRU(params['rnn_hidden_units']))
+        model.add(GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['droput_rate'], input_shape=(n_steps, n_features)))
+    model.add(GRU(params['rnn_hidden_units'], dropout=['dropout_rate']))
     model.add(Dense(params['fc_hidden_size'], activation='relu'))
     model.add(Dense(2, activation='softmax'))
     model.compile(optimizer='adam', loss='binary_crossentropy',
