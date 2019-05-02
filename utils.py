@@ -4,7 +4,7 @@ from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
-from sklearn.utils.multiclass import unique_labels
+from skimage import transform
 
 
 def split_data(list_of_data, split, random=True, batch_size=None):
@@ -54,19 +54,25 @@ def false_positive(y_true, y_pred):
     return K.sum(y_pred_pos * y_neg) / (K.sum(y_neg) + K.epsilon())
 
 
-def masked_mse(labels):
-    def f(y_true, y_pred):
-        return K.sum(K.square(y_true - y_pred)[labels])
-    return f
-
-
-
 def confusion_mtx(y_true, y_pred):
     y_true = np.ravel(np.array(y_true))
     y_pred = np.ravel(np.array(y_pred))
     cm = confusion_matrix(y_true, y_pred, labels=[1, 0])
     cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
     return cm
+
+
+def batch_cam(mod, data, batch_size):
+    X, sw = data
+    dense_weights = mod.get_layer('time_output').get_weights()[0][-96:, 0]
+    last_conv = K.function(mod.inputs, [mod.layers[-6].output])
+    cams = np.empty(X.shape[:-1])
+    for i in range(int(np.ceil(X.shape[0] / batch_size))):
+        cbs = min(batch_size, X.shape[0] - i * batch_size)
+        x = [d[i * batch_size:i * batch_size + cbs] for d in data]
+        cam = np.sum(last_conv(x)[0] * dense_weights[None, None, None, :], axis=-1)
+        cams[i * batch_size:i * batch_size + cbs] = transform.resize(cam, (cbs, X.shape[1], X.shape[2]))
+    return cams
 
 
 def plot_confusion_matrix(cm,

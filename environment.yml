@@ -10,6 +10,7 @@ dependencies:
    - pandas
    - cartopy
    - scikit-learn
+   - scikit-image
    - pip
    - pip:
       - pymap3d

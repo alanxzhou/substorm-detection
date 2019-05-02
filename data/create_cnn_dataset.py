@@ -32,7 +32,7 @@ swind_T0 = 256  # minutes
 region_corners = [[-130, 45], [-60, 70]]
 window = 20
 n_pos_classes = 1
-ex_per_ss = 3
+ex_per_ss = 1
 min_per_class = Tfinal / n_pos_classes
 
 substorm_fn = "substorms.csv"
@@ -71,12 +71,16 @@ SW = []
 y = []
 strength = []
 interval_index = []
+ss_location = []
+st_location = []
 
 # collecting dataset stats
 total_substorms = 0
 n_out_of_region = 0
 n_no_mag_data = 0
 kept_storms = 0
+
+np.random.seed(111)
 
 # iterate over years
 for yr in range(1990, 2019):
@@ -87,6 +91,8 @@ for yr in range(1990, 2019):
     y_yr = []
     strength_yr = []
     interval_index_yr = []
+    ss_location_yr = []
+    st_location_yr = []
     year = str(yr)
 
     # gather substorms for the year
@@ -128,7 +134,7 @@ for yr in range(1990, 2019):
 
         # if the substorm occurs too early in the year (before T0 + substorm interval index), skip this substorm
         if ss_date_index - Tfinal - max(swind_T0, T0) < 0:
-            print("Not enough mag data", ss.index[i], ss_date_index, ss_loc.ravel())
+            print("Not enough mag/sw data", ss.index[i], ss_date_index, ss_loc.ravel())
             n_no_mag_data += 1
             continue
 
@@ -138,7 +144,7 @@ for yr in range(1990, 2019):
 
             # gather up the magnetometer data for the input interval
             mag_data = data[:, ss_date_index - ss_interval_index - T0:ss_date_index - ss_interval_index, 2:]
-
+            st_loc = data[:, ss_date_index - ss_interval_index - T0:ss_date_index - ss_interval_index, :2]
             if use_swind:
                 # gather solar wind data
                 sw_ss_index = np.argmax(date == solar_wind.index)
@@ -155,9 +161,11 @@ for yr in range(1990, 2019):
 
             # add this example to this years data buffer
             X_yr.append(mag_data)
+            st_location_yr.append(st_loc)
             y_yr.append(ss_interval_index // min_per_class + 1)
             interval_index_yr.append(ss_interval_index)
             strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
+            ss_location_yr.append(ss_loc)
 
         kept_storms += 1
 
@@ -177,6 +185,7 @@ for yr in range(1990, 2019):
         if not region_check:
             continue
         mag_data = data[:, random_date_index - T0:random_date_index, 2:]
+        st_loc = data[:, random_date_index - T0:random_date_index, :2]
         if use_swind:
             offset = np.argmax(dates[random_date_index] == solar_wind.index)
             sw_data = solar_wind.iloc[offset - swind_T0:offset].values
@@ -186,29 +195,37 @@ for yr in range(1990, 2019):
             SW_yr.append(sw_data)
         # add the negative examples to this years data buffer
         X_yr.append(mag_data)
+        st_location_yr.append(st_loc)
         y_yr.append(0)
         sme_idx = np.argmax(dates[random_date_index] == sme.index)
         strength_yr.append(np.nanmax(sme.iloc[sme_idx:sme_idx + window].values[:, 0]))
         interval_index_yr.append(-1)
+        ss_location_yr.append((-1, -1))
 
     # add this years data buffer to the overall data buffers
     X.append(np.stack(X_yr, axis=0))
+    st_location.append(np.stack(st_location_yr, axis=0))
     y.append(np.array(y_yr))
     interval_index.append(np.array(interval_index_yr))
     if use_swind:
         SW.append(np.stack(SW_yr, axis=0))
     strength.append((np.array(strength_yr)))
+    ss_location.append(np.stack(ss_location_yr, axis=0))
 
 # concatenate all of the data buffers into one big numpy array
 X = np.concatenate(X, axis=0)
+st_location = np.concatenate(st_location, axis=0)
 mask = ~np.all(np.isnan(X), axis=(0, 2, 3))
 X = X[:, mask, :, :]
+st_location = st_location[:, mask, :, :]
 X[np.isnan(X)] = 0
+st_location[np.isnan(st_location)] = -1
 y = np.concatenate(y, axis=0)
 interval_index = np.concatenate(interval_index, axis=0)
 strength = np.concatenate(strength, axis=0)
 if use_swind:
     SW = np.concatenate(SW, axis=0)
+ss_location = np.concatenate(ss_location, axis=0)
 
 # figure out good ordering for the stations (rows)
 station_locations = station_locations[mask]
@@ -222,12 +239,15 @@ dists[np.isnan(dists)] = 0
 sa = anneal.SimAnneal(station_locations, dists, stopping_iter=100000000)
 sa.anneal()
 X = X[:, sa.best_solution, :, :]
+st_location = st_location[:, sa.best_solution, :, :]
 
 # save the dataset
 if use_swind:
-    np.savez(output_fn, X=X, y=y, SW=SW, strength=strength, interval_index=interval_index)
+    np.savez(output_fn, X=X, y=y, SW=SW, strength=strength, interval_index=interval_index, ss_location=ss_location,
+             st_location=st_location)
 else:
-    np.savez(output_fn, X=X, y=y, strength=strength, interval_index=interval_index)
+    np.savez(output_fn, X=X, y=y, strength=strength, interval_index=interval_index, ss_location=ss_location,
+             st_location=st_location)
 
 print("total storms: ", total_substorms)
 print("Number skipped because of storms out of region: ", n_out_of_region, n_out_of_region / total_substorms)
