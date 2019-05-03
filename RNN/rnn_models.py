@@ -155,7 +155,7 @@ def train_basic_gru(X_train, y_train, X_val, y_val, params):
     model = Sequential()
     _, n_steps, n_features = np.shape(X_train)
     for i in range(params['n_stacks']-1):
-        model.add(GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['droput_rate'], input_shape=(n_steps, n_features)))
+        model.add(GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['dropout_rate'], input_shape=(n_steps, n_features)))
     model.add(GRU(params['rnn_hidden_units'], dropout=params['dropout_rate']))
     model.add(Dense(params['fc_hidden_size'], activation='relu'))
     model.add(Dense(2, activation='softmax'))
