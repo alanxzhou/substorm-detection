@@ -63,9 +63,9 @@ def confusion_mtx(y_true, y_pred):
     return cm
 
 
-def batch_cam(mod, data, batch_size):
+def batch_cam(mod, data, batch_size, mag_channels):
     X, sw = data
-    dense_weights = mod.get_layer('time_output').get_weights()[0][-96:, 0]
+    dense_weights = mod.get_layer('time_output').get_weights()[0][-mag_channels:, 0]
     last_conv = K.function(mod.inputs, [mod.layers[-6].output])
     cams = np.empty(X.shape[:-1])
     for i in range(int(np.ceil(X.shape[0] / batch_size))):

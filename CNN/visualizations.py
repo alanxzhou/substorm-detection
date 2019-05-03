@@ -12,25 +12,25 @@ sns.set()
 ########################################################################################################################
 # CONFIGURATION
 ########################################################################################################################
-TRAIN = True
+TRAIN = False
 
 data_fn = "../data/2classes_data128_withsw_small.npz"
 train_test_split = .11
 train_val_split = .15
 model_file = "saved models/final_cnn_model.h5"
 
-params = {'batch_size': 64, 'epochs': 20, 'verbose': 2, 'n_classes': 2,
+params = {'batch_size': 8, 'epochs': 15, 'verbose': 2, 'n_classes': 2,
           'time_output_weight': 1000000, 'SW': True,
 
           'mag_T0': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
-          'mag_downsampling_strides': (2, 2),
-          'mag_kernel_size': (2, 11), 'mag_fl_filters': 48,
-          'mag_fl_strides': (3, 2),
-          'mag_fl_kernel_size': (3, 11), 'mag_type': 'basic',
+          'mag_downsampling_strides': (2, 3),
+          'mag_kernel_size': (2, 11), 'mag_fl_filters': 16,
+          'mag_fl_strides': (1, 3),
+          'mag_fl_kernel_size': (1, 13), 'mag_type': 'basic',
 
-          'sw_T0': 128, 'sw_stages': 4, 'sw_blocks_per_stage': 3,
-          'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 64,
-          'sw_fl_strides': 4, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
+          'sw_T0': 192, 'sw_stages': 1, 'sw_blocks_per_stage': 1,
+          'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 16,
+          'sw_fl_strides': 3, 'sw_fl_kernel_size': 15, 'sw_type': 'residual'}
 
 ########################################################################################################################
 # DATA LOADING
@@ -111,7 +111,7 @@ pred_lab = pred_lab[:, 0]
 y_true = y_true[:, 0].astype(int)
 
 # CLASS ACTIVATION MAPS ################################################################################################
-cams = utils.batch_cam(mod, test_data, 64)
+cams = utils.batch_cam(mod, test_data, 64, 32)
 # don't include evidence from missing data
 no_loc_mask = np.any(st_loc_test == -1, axis=-1)
 # "attention" (softmax activation)
@@ -184,7 +184,7 @@ ax2.set_ylim([0, 1])
 fig.tight_layout()
 
 # FEATURES #############################################################################################################
-n_examples = 1
+n_examples = 3
 # true positive
 tp_mask = (pred_lab == 1) * (y_true == 1)
 attn_threshold = np.max(attn[tp_mask, :, :], axis=2).max(axis=1).min() * .9
@@ -284,7 +284,7 @@ for _ in range(n_examples):
 # strength pred vs actual
 # get the R scores on here
 strength_df = pd.DataFrame(np.stack((strength_true, strength_pred, y_true), axis=1), columns=['Strength True', 'Predicted Strength', 'Substorm'])
-g = sns.lmplot('Strength True', 'Predicted Strength', col='Substorm', hue='Substorm', data=strength_df, scatter_kws={'s': 5})
+g = sns.lmplot('Strength True', 'Predicted Strength', col='Substorm', hue='Substorm', data=strength_df, scatter_kws={'s': 2})
 
 cmat: plt.Axes = utils.plot_confusion_matrix(y_true, pred_lab, np.array(['No Substorm', 'Substorm']),
                                              normalize=True, title="Confusion Matrix")
