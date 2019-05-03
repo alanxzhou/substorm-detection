@@ -2,6 +2,7 @@ from CNN import models
 import utils
 import numpy as np
 import keras
+from keras.utils import plot_model
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import metrics
@@ -9,12 +10,12 @@ import pandas as pd
 sns.set()
 
 # CONFIGURATION
-TRAIN = False
+TRAIN = True
 
 data_fn = "../data/2classes_data128_withsw_small.npz"
 train_test_split = .11
 train_val_split = .15
-model_file = "saved models/model.h5"
+model_file = "saved models/final_cnn_model.h5"
 
 # load in the data created by "create_dataset.py"
 data = np.load(data_fn)
@@ -58,18 +59,18 @@ print("X train shape:", X_train.shape, "proportion of substorms: ", np.mean(y_tr
 print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
 print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test))
 
-params = {'batch_size': 16, 'epochs': 20, 'verbose': 2, 'n_classes': 2,
+params = {'batch_size': 64, 'epochs': 30, 'verbose': 2, 'n_classes': 2,
           'time_output_weight': 1000000, 'SW': True,
 
-          'mag_T0': 128, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
-          'mag_downsampling_strides': (1, 2),
-          'mag_kernel_size': (1, 11), 'mag_fl_filters': 48,
-          'mag_fl_strides': (2, 2),
-          'mag_fl_kernel_size': (2, 11), 'mag_type': 'residual',
+          'mag_T0': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
+          'mag_downsampling_strides': (2, 2),
+          'mag_kernel_size': (2, 11), 'mag_fl_filters': 48,
+          'mag_fl_strides': (3, 2),
+          'mag_fl_kernel_size': (3, 11), 'mag_type': 'basic',
 
-          'sw_T0': 256, 'sw_stages': 3, 'sw_blocks_per_stage': 2,
-          'sw_downsampling_strides': 2, 'sw_kernel_size': 11, 'sw_fl_filters': 48,
-          'sw_fl_strides': 3, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
+          'sw_T0': 128, 'sw_stages': 4, 'sw_blocks_per_stage': 3,
+          'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 64,
+          'sw_fl_strides': 4, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
 
 if TRAIN:
     hist, mod = models.train_cnn(train_data, train_targets, val_data, val_targets, params)
@@ -273,3 +274,5 @@ strength_df = pd.DataFrame(np.stack((strength_true, strength_pred, y_true), axis
 g = sns.lmplot('Strength True', 'Predicted Strength', col='Substorm', hue='Substorm', data=strength_df, scatter_kws={'s': 5})
 
 plt.show()
+
+plot_model(mod, to_file="saved models/final_cnn_model.png", show_shapes=True, show_layer_names=False)

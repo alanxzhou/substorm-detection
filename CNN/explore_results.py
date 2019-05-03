@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 plt.style.use("ggplot")
 
-results_fn = "search_results_2.pkl"
+results_fn = "search_results_2classes.pkl"
 
 with open(results_fn, 'rb') as pkl:
     raw_results = pickle.load(pkl, encoding='latin')
