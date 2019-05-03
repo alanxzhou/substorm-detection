@@ -14,10 +14,10 @@ def train_functional_rnn_combined(X_train, y_train, X_val, y_val, params):
     _, n_steps_sw, n_features_sw = np.shape(sw_data)
 
     # magnetic field input
-    mag_input = Input(batch_shape=[params['batch_size'], n_steps_mag, n_features_mag])
+    mag_input = Input(batch_shape=[None, n_steps_mag, n_features_mag])
 
     # solar wind input
-    sw_input = Input(batch_shape=[params['batch_size'], n_steps_sw, n_features_sw])
+    sw_input = Input(batch_shape=[None, n_steps_sw, n_features_sw])
 
     recurrent_mag, recurrent_sw = stacked_rnn_layer(params, mag_input, sw_input)
 
@@ -59,10 +59,10 @@ def train_functional_rnn_single(X_train, y_train, X_val, y_val, params):
     _, n_steps_sw, n_features_sw = np.shape(sw_data)
 
     # magnetic field input
-    mag_input = Input(batch_shape=[params['batch_size'], n_steps_mag, n_features_mag])
+    mag_input = Input(batch_shape=[None, n_steps_mag, n_features_mag])
 
     # solar wind input
-    sw_input = Input(batch_shape=[params['batch_size'], n_steps_sw, n_features_sw])
+    sw_input = Input(batch_shape=[None, n_steps_sw, n_features_sw])
     #filtered_sw = Conv1D(filters=1, kernel_size=1, data_format='channels_last')(sw_input)
 
     recurrent_mag, recurrent_sw = stacked_rnn_layer(params, mag_input, sw_input)
@@ -82,7 +82,7 @@ def train_functional_rnn_single(X_train, y_train, X_val, y_val, params):
             metrics = ['accuracy']
         model = Model(inputs=[mag_input, sw_input], outputs=time_output)
         y_train, y_val = y_time, y_time_val
-    elif params['output_type'].lower() == 'time':
+    elif params['output_type'].lower() == 'strength':
         strength_output = keras.layers.Dense(1, name='strength_output')(last_layer)
         model = Model(inputs=[mag_input, sw_input], outputs=strength_output)
         loss = 'mse'
@@ -156,7 +156,7 @@ def train_basic_gru(X_train, y_train, X_val, y_val, params):
     _, n_steps, n_features = np.shape(X_train)
     for i in range(params['n_stacks']-1):
         model.add(GRU(params['rnn_hidden_units'], return_sequences=True, dropout=params['droput_rate'], input_shape=(n_steps, n_features)))
-    model.add(GRU(params['rnn_hidden_units'], dropout=['dropout_rate']))
+    model.add(GRU(params['rnn_hidden_units'], dropout=params['dropout_rate']))
     model.add(Dense(params['fc_hidden_size'], activation='relu'))
     model.add(Dense(2, activation='softmax'))
     model.compile(optimizer='adam', loss='binary_crossentropy',
