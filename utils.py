@@ -1,6 +1,7 @@
 import numpy as np
 import keras.backend as K
 from sklearn.metrics import confusion_matrix
+from sklearn.utils.multiclass import unique_labels
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import OneHotEncoder
 import matplotlib.pyplot as plt
@@ -75,7 +76,20 @@ def batch_cam(mod, data, batch_size):
     return cams
 
 
-def plot_confusion_matrix(cm,
+def rnn_format_x(list_of_x):
+    """
+    reformats feature arrays to match input dimensions for RNNs
+    :param list_of_x: list of feature arrays (e.g., X_train, X_val, etc.)
+    :return: list of reshaped feature arrays
+    """
+    x_rnn = []
+    for i in range(len(list_of_x)):
+        a0, a1, a2, a3 = np.shape(list_of_x[i])
+        x_rnn.append(np.reshape(list_of_x[i], (a0, a2, a1*a3)))
+    return x_rnn
+
+
+def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=False,
                           title=None,
                           cmap=plt.cm.Blues):
@@ -89,6 +103,10 @@ def plot_confusion_matrix(cm,
         else:
             title = 'Confusion matrix, without normalization'
 
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # Only use the labels that appear in the data
+    classes = classes[unique_labels(y_true, y_pred)]
     if normalize:
         cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         print("Normalized confusion matrix")
@@ -103,6 +121,8 @@ def plot_confusion_matrix(cm,
     # We want to show all ticks...
     ax.set(xticks=np.arange(cm.shape[1]),
            yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
            title=title,
            ylabel='True label',
            xlabel='Predicted label')
@@ -121,19 +141,6 @@ def plot_confusion_matrix(cm,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
-
-
-def rnn_format_x(list_of_x):
-    """
-    reformats feature arrays to match input dimensions for RNNs
-    :param list_of_x: list of feature arrays (e.g., X_train, X_val, etc.)
-    :return: list of reshaped feature arrays
-    """
-    x_rnn = []
-    for i in range(len(list_of_x)):
-        a0, a1, a2, a3 = np.shape(list_of_x[i])
-        x_rnn.append(np.reshape(list_of_x[i], (a0, a2, a1*a3)))
-    return x_rnn
 
 
 def rnn_format_y(list_of_y):

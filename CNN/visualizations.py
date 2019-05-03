@@ -9,7 +9,9 @@ from sklearn import metrics
 import pandas as pd
 sns.set()
 
+########################################################################################################################
 # CONFIGURATION
+########################################################################################################################
 TRAIN = True
 
 data_fn = "../data/2classes_data128_withsw_small.npz"
@@ -17,14 +19,29 @@ train_test_split = .11
 train_val_split = .15
 model_file = "saved models/final_cnn_model.h5"
 
-# load in the data created by "create_dataset.py"
+params = {'batch_size': 64, 'epochs': 20, 'verbose': 2, 'n_classes': 2,
+          'time_output_weight': 1000000, 'SW': True,
+
+          'mag_T0': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
+          'mag_downsampling_strides': (2, 2),
+          'mag_kernel_size': (2, 11), 'mag_fl_filters': 48,
+          'mag_fl_strides': (3, 2),
+          'mag_fl_kernel_size': (3, 11), 'mag_type': 'basic',
+
+          'sw_T0': 128, 'sw_stages': 4, 'sw_blocks_per_stage': 3,
+          'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 64,
+          'sw_fl_strides': 4, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
+
+########################################################################################################################
+# DATA LOADING
+########################################################################################################################
 data = np.load(data_fn)
-X = data['X']
+X = data['X'][:, :, -params['mag_T0']:]
 y = data['y'][:, None]
 strength = data['strength']
-SW = data['SW']
+SW = data['SW'][:, -params['sw_T0']:]
 ind = data['interval_index']
-st_loc = data['st_location']
+st_loc = data['st_location'][:, :, -params['mag_T0']:]
 ss_loc = data['ss_location']
 
 # create train, val and test sets
@@ -59,36 +76,30 @@ print("X train shape:", X_train.shape, "proportion of substorms: ", np.mean(y_tr
 print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
 print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test))
 
-params = {'batch_size': 64, 'epochs': 30, 'verbose': 2, 'n_classes': 2,
-          'time_output_weight': 1000000, 'SW': True,
-
-          'mag_T0': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
-          'mag_downsampling_strides': (2, 2),
-          'mag_kernel_size': (2, 11), 'mag_fl_filters': 48,
-          'mag_fl_strides': (3, 2),
-          'mag_fl_kernel_size': (3, 11), 'mag_type': 'basic',
-
-          'sw_T0': 128, 'sw_stages': 4, 'sw_blocks_per_stage': 3,
-          'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 64,
-          'sw_fl_strides': 4, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
+########################################################################################################################
+# MODEL
+########################################################################################################################
 
 if TRAIN:
     hist, mod = models.train_cnn(train_data, train_targets, val_data, val_targets, params)
     mod.summary()
     keras.models.save_model(mod, model_file)
+    plt.figure()
     plt.subplot(211)
     plt.plot(hist.history['val_time_output_acc'])
+    plt.plot(hist.history['time_output_acc'])
     plt.subplot(212)
     plt.plot(hist.history['val_strength_output_mean_absolute_error'])
+    plt.plot(hist.history['strength_output_mean_absolute_error'])
 else:
     mod = keras.models.load_model(model_file,
                                   custom_objects={'true_positive': utils.true_positive,
                                                   'false_positive': utils.false_positive})
     mod.summary()
 
-#######################################################################################################################
+########################################################################################################################
 # ANALYSIS
-#######################################################################################################################
+########################################################################################################################
 
 y_pred, strength_pred = mod.predict(test_data)
 pred_lab = np.round(y_pred).astype(int)
@@ -97,7 +108,7 @@ y_true, strength_true = test_targets
 y_pred = y_pred[:, 0]
 strength_pred = strength_pred[:, 0]
 pred_lab = pred_lab[:, 0]
-y_true = y_true[:, 0]
+y_true = y_true[:, 0].astype(int)
 
 # CLASS ACTIVATION MAPS ################################################################################################
 cams = utils.batch_cam(mod, test_data, 64)
@@ -111,6 +122,7 @@ neg_attn = np.exp(-cams) / np.sum(np.exp(-cams), axis=(1, 2), keepdims=True)
 cams[no_loc_mask] = 0
 
 fig, ax = plt.subplots(3, 3)
+fig.suptitle("Class Activation Maps")
 for i in range(3):
     for j in range(3):
         num = i * 3 + j
@@ -136,7 +148,6 @@ sns.distplot(err_df["MLT_2"], vertical=False, ax=g.ax_marg_x, color=sns.color_pa
 sns.distplot(err_df["MLAT_2"], vertical=True, ax=g.ax_marg_y, color=sns.color_palette()[1], kde=True)
 
 # TIME DIFFERENCE ######################################################################################################
-# first plt title
 prediction_interval = 30
 min_per_interval = 5
 acc = []
@@ -159,6 +170,7 @@ ax1.set_xlabel('Minutes away')
 ax1.set_ylabel('Accuracy', color=color)
 ax1.plot(np.arange(0, prediction_interval, min_per_interval), acc, color=color)
 ax1.tick_params(axis='y', labelcolor=color)
+ax1.set_ylim([0, 1])
 
 ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
 
@@ -167,11 +179,12 @@ ax2.set_ylabel('R2 score', color=color)  # we already handled the x-label with a
 ax2.plot(np.arange(0, prediction_interval, min_per_interval), r2, color=color)
 ax2.tick_params(axis='y', labelcolor=color)
 ax2.grid(None)
+ax2.set_ylim([0, 1])
 
 fig.tight_layout()
 
 # FEATURES #############################################################################################################
-n_examples = 5
+n_examples = 1
 # true positive
 tp_mask = (pred_lab == 1) * (y_true == 1)
 attn_threshold = np.max(attn[tp_mask, :, :], axis=2).max(axis=1).min() * .9
@@ -273,6 +286,13 @@ for _ in range(n_examples):
 strength_df = pd.DataFrame(np.stack((strength_true, strength_pred, y_true), axis=1), columns=['Strength True', 'Predicted Strength', 'Substorm'])
 g = sns.lmplot('Strength True', 'Predicted Strength', col='Substorm', hue='Substorm', data=strength_df, scatter_kws={'s': 5})
 
-plt.show()
+cmat: plt.Axes = utils.plot_confusion_matrix(y_true, pred_lab, np.array(['No Substorm', 'Substorm']),
+                                             normalize=True, title="Confusion Matrix")
+cmat.grid(None)
+
 
 plot_model(mod, to_file="saved models/final_cnn_model.png", show_shapes=True, show_layer_names=False)
+
+print(mod.evaluate(test_data, test_targets))
+
+plt.show()
