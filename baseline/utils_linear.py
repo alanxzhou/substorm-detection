@@ -13,15 +13,6 @@ def false_positive(y_true, y_pred):
     y_neg = 1 - y_pos
     return np.sum(y_pred_pos * y_neg) / (np.sum(y_neg) + 1e-10)
 
-
-def true_negative(y_true, y_pred):
-    return
-
-
-def false_negative(y_true, y_pred):
-    return
-
-
 class History:
     def __init__(self, history_dict):
         self.history = history_dict
