@@ -167,8 +167,10 @@ def linear_format_x(list_of_x):
     """
     x_linear = []
     for i in range(len(list_of_x)):
-        a0, a1, a2, a3 = np.shape(list_of_x[i])
-        x_linear.append(np.reshape(list_of_x[i], (a0, a1*a2*a3)))
+        a0, a1, a2 = np.shape(list_of_x[i])
+        x_linear.append(np.reshape(list_of_x[i], (a0, a1 * a2)))
+        #a0, a1, a2, a3 = np.shape(list_of_x[i])
+        #x_linear.append(np.reshape(list_of_x[i], (a0, a1*a2*a3)))
     return x_linear
 
 

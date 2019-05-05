@@ -1,6 +1,7 @@
 from CNN import models
 import utils
 import numpy as np
+from RNN import rnn_models
 
 ########################################################################################################################
 # CONFIGURATION
@@ -9,6 +10,7 @@ import numpy as np
 data_fn = "../data/2classes_data128_withsw_small.npz"
 train_test_split = .11
 train_val_split = .15
+"""
 model_file = "saved models/final_cnn_model.h5"
 
 params = {'batch_size': 64, 'epochs': 15, 'verbose': 2, 'n_classes': 2,
@@ -23,7 +25,22 @@ params = {'batch_size': 64, 'epochs': 15, 'verbose': 2, 'n_classes': 2,
           'sw_T0': 128, 'sw_stages': 4, 'sw_blocks_per_stage': 3,
           'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 64,
           'sw_fl_strides': 4, 'sw_fl_kernel_size': 11, 'sw_type': 'residual'}
-
+"""
+model_file = "saved models/final_rnn_model.h5"
+batch_size = 16
+params = {
+    'batch_size': batch_size,
+    'rnn_hidden_units': 64,
+    'n_stacks': 2,
+    'fc_hidden_size': 128,
+    'n_classes': 2,
+    'epochs': 20,
+    'verbose': True,
+    'time_output_weight': 1e6,
+    'rnn_type': 'GRU',
+    'output_type': 'time',
+    'dropout_rate': 0.3
+}
 ########################################################################################################################
 # DATA LOADING
 ########################################################################################################################
@@ -37,6 +54,7 @@ st_loc = data['st_location'][:, :, -params['mag_T0']:]
 ss_loc = data['ss_location']
 
 # create train, val and test sets
+"""
 train, test = utils.split_data([X, SW, y, strength, ind, st_loc, ss_loc], train_test_split, random=False)
 del data
 del X
@@ -67,6 +85,28 @@ ss_loc_test = ss_loc_test[idx]
 print("X train shape:", X_train.shape, "proportion of substorms: ", np.mean(y_train))
 print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
 print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test))
+"""
+
+
+train, test = utils.split_data([X, SW, y, strength], train_test_split, random=False)
+del X
+del SW
+del y
+del strength
+train, val = utils.split_data(train, train_val_split, random=True, batch_size=batch_size)
+X_train, sw_train, y_train, strength_train = train
+X_val, sw_val, y_val, strength_val = val
+X_test, sw_test, y_test, strength_test = test
+
+X_train, X_val, X_test = utils.rnn_format_x([X_train, X_val, X_test])
+y_train, y_val, y_test = utils.rnn_format_y([np.ravel(y_train), np.ravel(y_val), np.ravel(y_test)])
+
+X_train, X_val, X_test = [X_train, sw_train], [X_val, sw_val], [X_test, sw_test]
+y_train, y_val, y_test = [y_train, strength_train], [y_val, strength_val], [y_test, strength_test]
+
+del train
+del val
+del test
 
 ########################################################################################################################
 # MODEL
@@ -76,8 +116,12 @@ N = 10
 eval_length = 8
 results = np.empty((N, eval_length))
 for i in range(N):
+    """    
     hist, mod = models.train_cnn(train_data, train_targets, val_data, val_targets, params)
     results[i] = mod.evaluate(test_data, test_targets)
+    """
+    hist, mod = rnn_models.train_functional_rnn_combined(X_train, y_train, X_val, y_val, params)
+    results[i] = mod.evaluate(X_test, y_test)
 
 print("Mean")
 print(results.mean(axis=0))
