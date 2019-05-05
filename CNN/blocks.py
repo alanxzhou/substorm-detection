@@ -98,7 +98,7 @@ def res_block_2d(**conv_params):
         shortcut = x
         # 1 X 1 conv if shape is different. Else identity.
         if stride_width > 1 or stride_height > 1 or not equal_channels:
-            shortcut = keras.layers.Conv2D(filters=residual_shape[3], kernel_size=(1, 1),
+            shortcut = keras.layers.Conv2D(filters=residual_shape[3], kernel_size=(stride_width, stride_height),
                                            strides=(stride_width, stride_height), padding="valid",
                                            kernel_initializer="he_normal")(x)
 

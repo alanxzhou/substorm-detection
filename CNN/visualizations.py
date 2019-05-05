@@ -285,6 +285,10 @@ for _ in range(n_examples):
 # get the R scores on here
 strength_df = pd.DataFrame(np.stack((strength_true, strength_pred, y_true), axis=1), columns=['Strength True', 'Predicted Strength', 'Substorm'])
 g = sns.lmplot('Strength True', 'Predicted Strength', col='Substorm', hue='Substorm', data=strength_df, scatter_kws={'s': 2})
+r2_ss = metrics.r2_score(strength_true[y_true == 1], strength_pred[y_true == 1])
+r2_nss = metrics.r2_score(strength_true[y_true == 0], strength_pred[y_true == 0])
+print(r2_nss, r2_ss)
+
 
 cmat: plt.Axes = utils.plot_confusion_matrix(y_true, pred_lab, np.array(['No Substorm', 'Substorm']),
                                              normalize=True, title="Confusion Matrix")

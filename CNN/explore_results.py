@@ -33,6 +33,7 @@ for r in results:
     models.append(model)
 
 df = pd.DataFrame(models)
+print(df.shape)
 
 print(df.sort_values(by='accuracy').iloc[:10])
 
