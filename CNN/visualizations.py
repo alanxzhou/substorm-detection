@@ -1,12 +1,22 @@
+"""
+TODO:
+    - invesitgate location predictions
+    - Individial Time Series Invesitgation:
+        - scale better
+    - why does sml still get very low even for non substorm cases:
+        - check out what is going on during large sml, non substorm cases
+"""
 from CNN import models
 import utils
 import numpy as np
 import keras
 from keras.utils import plot_model
+import plotting
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import metrics
 import pandas as pd
+import cartopy.crs as ccrs
 sns.set()
 
 ########################################################################################################################
@@ -14,21 +24,22 @@ sns.set()
 ########################################################################################################################
 TRAIN = False
 
-data_fn = "../data/2classes_data128_withsw_small.npz"
-train_test_split = .11
+data_fn = "../data/2classes_data128.npz"
 train_val_split = .15
 model_file = "saved models/final_cnn_model.h5"
 
-params = {'batch_size': 8, 'epochs': 15, 'verbose': 2, 'n_classes': 2,
+t_tot = 128
+
+params = {'batch_size': 8, 'epochs': 18, 'verbose': 2, 'n_classes': 2,
           'time_output_weight': 1000000, 'SW': True,
 
-          'mag_T0': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
+          'Tm': 96, 'mag_stages': 1, 'mag_blocks_per_stage': 4,
           'mag_downsampling_strides': (2, 3),
           'mag_kernel_size': (2, 11), 'mag_fl_filters': 16,
           'mag_fl_strides': (1, 3),
           'mag_fl_kernel_size': (1, 13), 'mag_type': 'basic',
 
-          'sw_T0': 192, 'sw_stages': 1, 'sw_blocks_per_stage': 1,
+          'Tw': 192, 'sw_stages': 1, 'sw_blocks_per_stage': 1,
           'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 16,
           'sw_fl_strides': 3, 'sw_fl_kernel_size': 15, 'sw_type': 'residual'}
 
@@ -36,51 +47,71 @@ params = {'batch_size': 8, 'epochs': 15, 'verbose': 2, 'n_classes': 2,
 # DATA LOADING
 ########################################################################################################################
 data = np.load(data_fn)
-X = data['X'][:, :, -params['mag_T0']:]
-y = data['y'][:, None]
-strength = data['strength']
-SW = data['SW'][:, -params['sw_T0']:]
-ind = data['interval_index']
-st_loc = data['st_location'][:, :, -params['mag_T0']:]
-ss_loc = data['ss_location']
+mag_data_train = data['mag_data_train']  # MLT, MLAT, N, E, Z
+sw_data_train = data['sw_data_train']
+y_train = data['y_train']
+sme_data_train = data['sme_data_train']
+ss_interval_index_train = data['ss_interval_index_train'].astype(int)
+ss_location_train = data['ss_location_train']
+ss_dates_train = data['ss_dates_train']
+mag_data_test = data['mag_data_test']  # MLT, MLAT, N, E, Z
+sw_data_test = data['sw_data_test']
+y_test = data['y_test']
+sme_data_test = data['sme_data_test']
+ss_interval_index_test = data['ss_interval_index_test'].astype(int)
+ss_location_test = data['ss_location_test']
+ss_dates_test = data['ss_dates_test']
+stations = data['stations']
+station_locations = data['station_locations']
+
+sml_test = -1 * np.min(sme_data_test[np.arange(sme_data_test.shape[0])[:, None], t_tot + ss_interval_index_test[:, None]
+                                     + np.arange(20)[None, :], 1], axis=1)
 
 # create train, val and test sets
-train, test = utils.split_data([X, SW, y, strength, ind, st_loc, ss_loc], train_test_split, random=False)
+train, val = utils.split_data([mag_data_train, sw_data_train, y_train, sme_data_train, ss_interval_index_train,
+                               ss_location_train, ss_dates_train], train_val_split, random=True)
 del data
-del X
-del y
-del strength
-del SW
-del ind
-del st_loc
-del ss_loc
-train, val = utils.split_data(train, train_val_split, random=True)
-X_train, SW_train, y_train, strength_train, ind_train, st_loc_train, ss_loc_train = train
-X_val, SW_val, y_val, strength_val, ind_val, st_loc_val, ss_loc_val = val
-X_test, SW_test, y_test, strength_test, ind_test, st_loc_test, ss_loc_test = test
+del mag_data_train
+del y_train
+del sme_data_train
+del sw_data_train
+del ss_interval_index_train
+del ss_location_train
+del ss_dates_train
 
-train_data = [X_train, SW_train]
-train_targets = [y_train, strength_train]
-val_data = [X_val, SW_val]
-val_targets = [y_val, strength_val]
+mag_data_train, sw_data_train, y_train, sme_data_train, ss_interval_index_train, ss_location_train, ss_dates_train = train
+mag_data_val, sw_data_val, y_val, sme_data_val, ss_interval_index_val, ss_location_val, ss_dates_val = val
 
-idx = np.arange(X_test.shape[0])
-np.random.shuffle(idx)
-test_data = [X_test[idx], SW_test[idx]]
-test_targets = [y_test[idx], strength_test[idx]]
-ind_test = ind_test[idx]
-st_loc_test = st_loc_test[idx]
-ss_loc_test = ss_loc_test[idx]
+train_data = [mag_data_train[:, :, t_tot-params['Tm']:t_tot, 2:], sw_data_train[:, -params['Tw']:]]
+train_targets = [y_train, -1 * sme_data_train[:, 1]]
+val_data = [mag_data_val[:, :, t_tot-params['Tm']:t_tot, 2:], sw_data_val[:, -params['Tw']:]]
+val_targets = [y_val, -1 * sme_data_val[:, 1]]
 
-print("X train shape:", X_train.shape, "proportion of substorms: ", np.mean(y_train))
-print("X val shape:", X_val.shape, "proportion of substorms: ", np.mean(y_val))
-print("X test shape:", X_test.shape, "proportion of substorms: ", np.mean(y_test))
+shuff_idx = np.arange(mag_data_test.shape[0])
+np.random.shuffle(shuff_idx)
+
+mag_data_test = mag_data_test[shuff_idx]
+sw_data_test = sw_data_test[shuff_idx]
+y_test = y_test[shuff_idx]
+sme_data_test = sme_data_test[shuff_idx]
+ss_interval_index_test = ss_interval_index_test[shuff_idx]
+ss_location_test = ss_location_test[shuff_idx]
+ss_dates_test = ss_dates_test[shuff_idx]
+sml_test = sml_test[shuff_idx]
+
+test_data = [mag_data_test[:, :, t_tot-params['Tm']:t_tot, 2:], sw_data_test[:, -params['Tw']:]]
+test_targets = [y_test, sml_test]
+
+print("mag data train shape:", mag_data_train.shape, "proportion of substorms: ", np.mean(y_train))
+print("mag data val shape:", mag_data_val.shape, "proportion of substorms: ", np.mean(y_val))
+print("mag data test shape:", mag_data_test.shape, "proportion of substorms: ", np.mean(y_test))
 
 ########################################################################################################################
 # MODEL
 ########################################################################################################################
 
 if TRAIN:
+
     hist, mod = models.train_cnn(train_data, train_targets, val_data, val_targets, params)
     mod.summary()
     keras.models.save_model(mod, model_file)
@@ -108,35 +139,30 @@ y_true, strength_true = test_targets
 y_pred = y_pred[:, 0]
 strength_pred = strength_pred[:, 0]
 pred_lab = pred_lab[:, 0]
-y_true = y_true[:, 0].astype(int)
 
-# CLASS ACTIVATION MAPS ################################################################################################
-cams = utils.batch_cam(mod, test_data, 64, 32)
-# don't include evidence from missing data
-no_loc_mask = np.any(st_loc_test == -1, axis=-1)
-# "attention" (softmax activation)
-cams[no_loc_mask] = -999
-attn = np.exp(cams) / np.sum(np.exp(cams), axis=(1, 2), keepdims=True)
-cams[no_loc_mask] = 999
-neg_attn = np.exp(-cams) / np.sum(np.exp(-cams), axis=(1, 2), keepdims=True)
-cams[no_loc_mask] = 0
 
+"""
 fig, ax = plt.subplots(3, 3)
 fig.suptitle("Class Activation Maps")
 for i in range(3):
     for j in range(3):
         num = i * 3 + j
         ax[i, j].pcolormesh(cams[num], vmin=cams[:9].min(), vmax=cams[:9].max(), cmap='RdBu_r')
-        ax[i, j].set_title("P: {:4.2f}, L: {}, I: {}".format(y_pred[num], y_true[num], ind_test[num]))
+        ax[i, j].set_title("P: {:4.2f}, L: {}, I: {}".format(y_pred[num], y_true[num], ss_interval_index_test[num]))
 
 # LOCATIONS ############################################################################################################
-mask = np.all(st_loc_test != -1, axis=-1)
+st_loc_test = mag_data_test[:, :, -params['Tm']:, :2]
+mask = np.all(np.isfinite(st_loc_test), axis=-1)
 locs1 = np.sum(attn[:, :, :, None] * np.where(mask[:, :, :, None], st_loc_test, 0), axis=(1, 2))
-locs2 = st_loc_test[np.arange(st_loc_test.shape[0]), np.argmax(np.max(attn, axis=2), axis=1), -1] + [.5, 0]
-err1 = locs1[y_true == 1] - ss_loc_test[y_true == 1]
+max_tracks = st_loc_test[np.arange(st_loc_test.shape[0]), np.argmax(np.max(attn, axis=2), axis=1)]
+finite_ind = np.argwhere(np.isfinite(max_tracks).all(axis=2))
+final_finite = finite_ind[:-1][np.diff(finite_ind[:, 0]) == 1, 1]
+final_finite = np.concatenate((final_finite, [finite_ind[-1, 1]]))
+locs2 = st_loc_test[np.arange(st_loc_test.shape[0]), np.argmax(np.max(attn, axis=2), axis=1), final_finite] + [.5, 0]
+err1 = locs1[y_true == 1] - ss_location_test[y_true == 1]
 err1[err1[:, 0] > 12, 0] -= 24
 err1[err1[:, 0] < -12, 0] += 24
-err2 = locs2[y_true == 1] - ss_loc_test[y_true == 1]
+err2 = locs2[y_true == 1] - ss_location_test[y_true == 1]
 err2[err2[:, 0] > 12, 0] -= 24
 err2[err2[:, 0] < -12, 0] += 24
 err_df = pd.DataFrame(np.concatenate((err1, err2), axis=1), columns=['MLT_1', 'MLAT_1', 'MLT_2', 'MLAT_2'])
@@ -154,7 +180,7 @@ acc = []
 r2 = []
 fig, ax = plt.subplots(2, 3, sharex='col', sharey='row')
 for t in range(prediction_interval // min_per_interval):
-    mask = (t * min_per_interval <= ind_test) * (ind_test < (t + 1) * min_per_interval)
+    mask = (t * min_per_interval <= ss_interval_index_test) * (ss_interval_index_test < (t + 1) * min_per_interval)
     acc.append(np.mean(np.round(y_pred[mask]) == y_true[mask]))
     r2.append(metrics.r2_score(strength_true[mask], strength_pred[mask]))
     ax[t // 3, t % 3].plot(strength_true[mask], strength_pred[mask], '.')
@@ -182,105 +208,25 @@ ax2.grid(None)
 ax2.set_ylim([0, 1])
 
 fig.tight_layout()
-
+"""
 # FEATURES #############################################################################################################
-n_examples = 3
+
+n_examples = 2
 # true positive
 tp_mask = (pred_lab == 1) * (y_true == 1)
-attn_threshold = np.max(attn[tp_mask, :, :], axis=2).max(axis=1).min() * .9
-# find mag tracks where attention is > threshold
-tracks = np.argwhere(np.max(attn[tp_mask, :, :], axis=2) > attn_threshold)
-for _ in range(n_examples):
-    i = np.random.randint(0, tracks[:, 0].max())
-    current_tracks = tracks[tracks[:, 0] == i, :]
-    fig, ax = plt.subplots(current_tracks.shape[0], 1, sharex='col', sharey='row')
-    fig.suptitle("True Positive Features")
-    for j in range(current_tracks.shape[0]):
-        station = current_tracks[j, 1]
-        if current_tracks.shape[0] == 1:
-            cur_ax = ax
-        else:
-            cur_ax = ax[j]
-        cur_ax.set_title("Station {}".format(station))
-        cur_ax.plot(X_test[tp_mask, station, :, 0][i], label='N')
-        cur_ax.plot(X_test[tp_mask, station, :, 1][i], label='E')
-        cur_ax.plot(X_test[tp_mask, station, :, 2][i], label='Z')
-        for t in range(X_test.shape[2]):
-            cur_ax.axvline(x=t, alpha=attn[tp_mask, station][i][t], linewidth=7.5)
-        cur_ax.legend()
+tp_examples = np.argwhere(tp_mask)[:n_examples, 0]
 
-# true negative
-tn_mask = (pred_lab == 0) * (y_true == 0)
-attn_threshold = np.max(neg_attn[tn_mask, :, :], axis=2).max(axis=1).min() * .9
-# find mag tracks where attention is > threshold
-tracks = np.argwhere(np.max(attn[tn_mask, :, :], axis=2) > attn_threshold)
-for _ in range(n_examples):
-    i = np.random.randint(0, tracks[:, 0].max())
-    current_tracks = tracks[tracks[:, 0] == i, :]
-    fig, ax = plt.subplots(current_tracks.shape[0], 1, sharex='col', sharey='row')
-    fig.suptitle("True Negative Features")
-    for j in range(current_tracks.shape[0]):
-        station = current_tracks[j, 1]
-        if current_tracks.shape[0] == 1:
-            cur_ax = ax
-        else:
-            cur_ax = ax[j]
-        cur_ax.set_title("Station {}".format(station))
-        cur_ax.plot(X_test[tn_mask, station, :, 0][i], label='N')
-        cur_ax.plot(X_test[tn_mask, station, :, 1][i], label='E')
-        cur_ax.plot(X_test[tn_mask, station, :, 2][i], label='Z')
-        for t in range(X_test.shape[2]):
-            cur_ax.axvline(x=t, alpha=neg_attn[tn_mask, station][i][t], linewidth=7.5)
-        cur_ax.legend()
+plotter = plotting.MagGeoPlotter(mag_data_test, sw_data_test, y_test, sme_data_test, ss_interval_index_test,
+                                 ss_location_test, ss_dates_test, stations, station_locations, mod)
 
-# false positive
-fp_mask = (pred_lab == 1) * (y_true == 0)
-attn_threshold = np.max(attn[fp_mask, :, :], axis=2).max(axis=1).min() * .9
-# find mag tracks where attention is > threshold
-tracks = np.argwhere(np.max(attn[fp_mask, :, :], axis=2) > attn_threshold)
-for _ in range(n_examples):
-    i = np.random.randint(0, tracks[:, 0].max())
-    current_tracks = tracks[tracks[:, 0] == i, :]
-    fig, ax = plt.subplots(current_tracks.shape[0], 1, sharex='col', sharey='row')
-    fig.suptitle("False Positive Features")
-    for j in range(current_tracks.shape[0]):
-        station = current_tracks[j, 1]
-        if current_tracks.shape[0] == 1:
-            cur_ax = ax
-        else:
-            cur_ax = ax[j]
-        cur_ax.set_title("Station {}".format(station))
-        cur_ax.plot(X_test[fp_mask, station, :, 0][i], label='N')
-        cur_ax.plot(X_test[fp_mask, station, :, 1][i], label='E')
-        cur_ax.plot(X_test[fp_mask, station, :, 2][i], label='Z')
-        for t in range(X_test.shape[2]):
-            cur_ax.axvline(x=t, alpha=attn[fp_mask, station][i][t], linewidth=7.5)
-        cur_ax.legend()
+for i in tp_examples:
+    plotted_stations = plotter.plot_map_with_mag_data(i)
+    plotter.plot_cam(i)
+    plotter.plot_sme(i)
+    plotter.plot_filter_output(i, plotted_stations[0], layer=2)
+    # plotter.plot_filter_output(i, plotted_stations[0], layer=27)
 
-# false negative
-fn_mask = (pred_lab == 0) * (y_true == 1)
-attn_threshold = np.max(neg_attn[fn_mask, :, :], axis=2).max(axis=1).min() * .9
-# find mag tracks where attention is > threshold
-tracks = np.argwhere(np.max(neg_attn[fn_mask, :, :], axis=2) > attn_threshold)
-for _ in range(n_examples):
-    i = np.random.randint(0, tracks[:, 0].max())
-    current_tracks = tracks[tracks[:, 0] == i, :]
-    fig, ax = plt.subplots(current_tracks.shape[0], 1, sharex='col', sharey='row')
-    fig.suptitle("False Negative Features")
-    for j in range(current_tracks.shape[0]):
-        station = current_tracks[j, 1]
-        if current_tracks.shape[0] == 1:
-            cur_ax = ax
-        else:
-            cur_ax = ax[j]
-        cur_ax.set_title("Station {}".format(station))
-        cur_ax.plot(X_test[fn_mask, station, :, 0][i], label='N')
-        cur_ax.plot(X_test[fn_mask, station, :, 1][i], label='E')
-        cur_ax.plot(X_test[fn_mask, station, :, 2][i], label='Z')
-        for t in range(X_test.shape[2]):
-            cur_ax.axvline(x=t, alpha=neg_attn[fn_mask, station][i][t], linewidth=7.5)
-        cur_ax.legend()
-
+"""
 # strength pred vs actual
 # get the R scores on here
 strength_df = pd.DataFrame(np.stack((strength_true, strength_pred, y_true), axis=1), columns=['Strength True', 'Predicted Strength', 'Substorm'])
@@ -298,5 +244,5 @@ cmat.grid(None)
 plot_model(mod, to_file="saved models/final_cnn_model.png", show_shapes=True, show_layer_names=False)
 
 print(mod.evaluate(test_data, test_targets))
-
+"""
 plt.show()

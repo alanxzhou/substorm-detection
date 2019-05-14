@@ -16,7 +16,7 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
               'mag_flx2': False, 'mag_kernel_size': [3, 5], 'mag_fl_filters': 128, 'mag_fl_strides': [2, 3],
               'mag_fl_kernel_size': [2, 13],
 
-              'sw_T0': sw_T0, 'sw_stages': 3, 'sw_blocks_per_stage': 1, 'sw_downsampling_strides': 2,
+              'Tw': Tw, 'sw_stages': 3, 'sw_blocks_per_stage': 1, 'sw_downsampling_strides': 2,
               'sw_flx2': True, 'sw_kernel_size': 9, 'sw_fl_filters': 32, 'sw_fl_strides': 2,
               'sw_fl_kernel_size': 13}
     """
@@ -26,7 +26,7 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
     mag_data, sw_data = X_train
     mag_data_val, sw_data_val = X_val
 
-    mag_input = keras.layers.Input(shape=[mag_data.shape[1], params['mag_T0'], mag_data.shape[-1]])
+    mag_input = keras.layers.Input(shape=[mag_data.shape[1], params['Tm'], mag_data.shape[-1]])
     if params['mag_type'] == 'residual':
         mag_net = _residual_2d_net(params['mag_fl_filters'], params['mag_fl_kernel_size'], params['mag_fl_strides'],
                                    params['mag_stages'], params['mag_blocks_per_stage'], params['mag_kernel_size'],
@@ -38,7 +38,7 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
 
     if params['SW']:
         # Solar Wind Net
-        sw_input = keras.layers.Input(shape=[params['sw_T0'], sw_data.shape[2]])
+        sw_input = keras.layers.Input(shape=[params['Tw'], sw_data.shape[2]])
         if params['sw_type'] == 'residual':
             sw_net = _residual_1d_net(params['sw_fl_filters'], params['sw_fl_kernel_size'], params['sw_fl_strides'],
                                       params['sw_stages'], params['sw_blocks_per_stage'], params['sw_kernel_size'],
@@ -50,13 +50,13 @@ def train_cnn(X_train, y_train, X_val, y_val, params):
         # Concatenate the two results, apply a dense layer
         last_layer = keras.layers.Concatenate()([sw_net, mag_net])
         inputs = [mag_input, sw_input]
-        train_data = [mag_data[:, :, -params['mag_T0']:], sw_data[:, -params['sw_T0']:]]
-        val_data = [mag_data_val[:, :, -params['mag_T0']:], sw_data_val[:, -params['sw_T0']:]]
+        train_data = [mag_data[:, :, -params['Tm']:], sw_data[:, -params['Tw']:]]
+        val_data = [mag_data_val[:, :, -params['Tm']:], sw_data_val[:, -params['Tw']:]]
     else:
         last_layer = mag_net
         inputs = mag_input
-        train_data = mag_data[:, :, -params['mag_T0']:]
-        val_data = mag_data_val[:, :, -params['mag_T0']:]
+        train_data = mag_data[:, :, -params['Tm']:]
+        val_data = mag_data_val[:, :, -params['Tm']:]
 
     if params['n_classes'] == 2:
         time_output = keras.layers.Dense(1, activation='sigmoid', name='time_output')(last_layer)
