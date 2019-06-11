@@ -374,292 +374,222 @@ class BinaryClassificationDataset:
             sme_data = self.supermag.sme.iloc[ss_index + sme_data_idx].values
         return sme_data, mask
 
-    class BinaryClassificationDataset:
-        # TODO: USE STRENGTH DOESN'T DO ANYTHING RIGHT NOW, STRENGTH IS ALWAYS USED
 
-        def __init__(self, args, supermag_data, output_fn=None, use_strength=False):
+class RegressionDataset:
+    # TODO: USE STRENGTH DOESN'T DO ANYTHING RIGHT NOW, STRENGTH IS ALWAYS USED
+    # this dataset creator will randomly sample a list of dates from each year and the target will be the
+    # number of minutes before the next substorm
 
-            self.supermag = supermag_data
-            self.Tm = args.Tm  # length of interval to use as input data
-            self.Tp = args.Tp  # length of prediction interval
-            self.Tw = args.Tw  # minutes
-            self.sme_window = 20
-            self.n_pos_classes = args.posclasses
-            self.ex_per_ss = args.experss
-            self.min_per_class = self.Tp / self.n_pos_classes
+    def __init__(self, supermag_data, Tm, Tw, ex_per_year, output_fn=None, use_strength=False):
 
-            self.output_fn = output_fn
-            if output_fn is None:
-                self.output_fn = "{}classes_data{}.npz".format(self.Tm)
+        self.supermag = supermag_data
+        self.Tm = Tm  # length of interval to use as input data
+        self.Tw = Tw  # minutes
+        self.ex_per_year = ex_per_year
+        self.sme_window = 20
 
-            self.use_strength = use_strength
+        self.output_fn = output_fn
+        if output_fn is None:
+            self.output_fn = "regression_data{}.npz".format(self.Tm)
 
-            # dataset stats
-            self.total_substorms = 0
-            self.n_out_of_region = 0
-            self.n_no_mag_data = 0
-            self.kept_storms = 0
+        self.use_strength = use_strength
 
-        def run(self, training_years, test_years):
-            # training data
-            train_dict = self.assemble_over_range(training_years, test=False)
+        # dataset stats
+        self.total_substorms = 0
+        self.n_no_mag_data = 0
+        self.kept_storms = 0
 
-            # test data
-            test_dict = self.assemble_over_range(test_years, test=True)
+    def run(self, training_years, test_years):
+        # training data
+        train_dict = self.assemble_over_range(training_years, test=False)
 
-            train_dict, test_dict = self.preprocess_data(train_dict, test_dict)
+        # test data
+        test_dict = self.assemble_over_range(test_years, test=True)
 
-            # figure out good ordering for the stations (rows)
-            station_locations = self.supermag.station_locations
-            dists = utils.distance_matrix(station_locations)
-            dists[np.isnan(dists)] = 0
+        train_dict, test_dict = self.preprocess_data(train_dict, test_dict)
 
-            sa = utils.SimAnneal(station_locations, dists, stopping_iter=100000000)
-            sa.anneal()
-            train_dict['mag_data_train'] = train_dict['mag_data_train'][:, sa.best_solution, :, :]
-            test_dict['mag_data_test'] = test_dict['mag_data_test'][:, sa.best_solution, :, :]
-            stations = [self.supermag.stations[s] for s in sa.best_solution]
-            station_locations = station_locations[sa.best_solution]
+        # figure out good ordering for the stations (rows)
+        print("Annealing...")
+        station_locations = self.supermag.station_locations
+        dists = utils.distance_matrix(station_locations)
+        dists[np.isnan(dists)] = 0
 
-            # save the dataset
-            np.savez(self.output_fn, **{**train_dict, **test_dict, 'stations': stations,
-                                        'station_locations': station_locations})
+        sa = utils.SimAnneal(station_locations, dists, stopping_iter=100000000)
+        sa.anneal()
+        train_dict['mag_data_train'] = train_dict['mag_data_train'][:, sa.best_solution, :, :]
+        test_dict['mag_data_test'] = test_dict['mag_data_test'][:, sa.best_solution, :, :]
+        stations = [self.supermag.stations[s] for s in sa.best_solution]
+        station_locations = station_locations[sa.best_solution]
 
-            print("total storms: ", self.total_substorms)
-            print("Number skipped because of storms out of region: ", self.n_out_of_region,
-                  self.n_out_of_region / self.total_substorms)
-            print("Number skipped because of missing data: ", self.n_no_mag_data,
-                  self.n_no_mag_data / self.total_substorms)
-            print("Number of storms kept: ", self.kept_storms, self.kept_storms / self.total_substorms)
+        # save the dataset
+        np.savez(self.output_fn, **{**train_dict, **test_dict, 'stations': stations,
+                                    'station_locations': station_locations})
 
-        @staticmethod
-        def preprocess_data(train_dict, test_dict):
+        print("total storms: ", self.total_substorms)
 
-            mag_data_train = train_dict['mag_data_train'][:, :, :, 2:]
-            mag_data_train[np.isnan(mag_data_train)] = 0
-            train_dict['mag_data_train'][:, :, :, 2:] = mag_data_train
+    @staticmethod
+    def preprocess_data(train_dict, test_dict):
 
-            mag_data_test = test_dict['mag_data_test'][:, :, :, 2:]
-            mag_data_test[np.isnan(mag_data_test)] = 0
-            test_dict['mag_data_test'][:, :, :, 2:] = mag_data_test
+        mag_data_train = train_dict['mag_data_train'][:, :, :, 2:]
+        mag_data_train[np.isnan(mag_data_train)] = 0
+        train_dict['mag_data_train'][:, :, :, 2:] = mag_data_train
 
-            return train_dict, test_dict
+        mag_data_test = test_dict['mag_data_test'][:, :, :, 2:]
+        mag_data_test[np.isnan(mag_data_test)] = 0
+        test_dict['mag_data_test'][:, :, :, 2:] = mag_data_test
 
-        def assemble_over_range(self, years, test=False):
-            mag_data_list = []
-            sw_data_list = []
-            y_list = []
-            sme_data_list = []
-            ss_interval_index_list = []
-            ss_location_list = []
-            ss_dates_list = []
-            for yr in years:
-                print("{}: {}".format(yr, ['Train', 'Test'][test]))
-                mag_data, sw_data, y, sme_data, ss_interval_index, ss_location, ss_dates = self.process_data_for_year(
-                    yr, test)
-                mag_data_list.append(mag_data)
-                sw_data_list.append(sw_data)
-                y_list.append(y)
-                sme_data_list.append(sme_data)
-                ss_interval_index_list.append(ss_interval_index)
-                ss_location_list.append(ss_location)
-                ss_dates_list.append(ss_dates)
+        return train_dict, test_dict
 
-            # concatenate all of the data lists
-            mag_data = np.concatenate(mag_data_list, axis=0)
-            sw_data = np.concatenate(sw_data_list, axis=0)
-            y = np.concatenate(y_list, axis=0)
-            sme_data = np.concatenate(sme_data_list, axis=0)
-            ss_interval_index = np.concatenate(ss_interval_index_list, axis=0)
-            ss_location = np.concatenate(ss_location_list, axis=0)
-            ss_dates = np.concatenate(ss_dates_list, axis=0)
-            ext = ['_train', '_test'][test]
-            data_dict = {
-                'mag_data' + ext: mag_data,
-                'sw_data' + ext: sw_data,
-                'y' + ext: y,
-                'sme_data' + ext: sme_data,
-                'ss_interval_index' + ext: ss_interval_index,
-                'ss_location' + ext: ss_location,
-                'ss_dates' + ext: ss_dates}
-            return data_dict
+    def assemble_over_range(self, years, test=False):
+        mag_data_list = []
+        sw_data_list = []
+        y_list = []
+        sme_data_list = []
+        ss_location_list = []
+        ss_dates_list = []
+        for yr in years:
+            print("{}: {}".format(yr, ['Train', 'Test'][test]))
+            mag_data, sw_data, y, sme_data, ss_location, ss_dates = self.process_data_for_year(
+                yr, test)
+            mag_data_list.append(mag_data)
+            sw_data_list.append(sw_data)
+            y_list.append(y)
+            sme_data_list.append(sme_data)
+            ss_location_list.append(ss_location)
+            ss_dates_list.append(ss_dates)
 
-        def process_data_for_year(self, year, test=False):
-            """
-            Info for each example:
-                Data:
-                    [x] Mag Input (including station location)
-                    [x] SW Input
-                    [x] label target
-                    [x] strength target
-                    [x] location target (-1 for negative examples)
-                metadata:
-                    [x] interval index
-                    [x] substorm date / time
-                    [x] strength interval index / SME location
-                    [x] (n stations with data can be calculated later)
-                stats about dataset:
-                    [x] n substorms considered
-                    [x] n substorms accepted
-                    [ ] n rejected because outside region
-                    [ ] n rejected because not enough data
+        # concatenate all of the data lists
+        mag_data = np.concatenate(mag_data_list, axis=0)
+        sw_data = np.concatenate(sw_data_list, axis=0)
+        y = np.concatenate(y_list, axis=0)
+        sme_data = np.concatenate(sme_data_list, axis=0)
+        ss_location = np.concatenate(ss_location_list, axis=0)
+        ss_dates = np.concatenate(ss_dates_list, axis=0)
+        ext = ['_train', '_test'][test]
+        data_dict = {
+            'mag_data' + ext: mag_data,
+            'sw_data' + ext: sw_data,
+            'y' + ext: y,
+            'sme_data' + ext: sme_data,
+            'ss_location' + ext: ss_location,
+            'ss_dates' + ext: ss_dates}
+        return data_dict
 
-            If test:
-                - extra mag data
+    def process_data_for_year(self, year, test=False):
+        """
+        Info for each example:
+            Data:
+                [x] Mag Input (including station location)
+                [x] SW Input
+                [x] regression target
+                [x] strength target
+                [x] location target (-1 for negative examples)
+            metadata:
+                [x] substorm date / time
+                [x] strength interval index / SME location
+                [x] (n stations with data can be calculated later)
+            stats about dataset:
+                [x] n substorms considered
+                [x] n substorms accepted
 
-            Parameters
-            ----------
-            year
+        If test:
+            - extra mag data
 
-            Returns
-            -------
-            mag_data, sw_data, y, sme_data, ss_interval_index, ss_location, ss_dates
+        Parameters
+        ----------
+        year
 
-            """
-            if not isinstance(year, str):
-                year = str(year)
+        Returns
+        -------
+        mag_data, sw_data, y, sme_data, ss_interval_index, ss_location, ss_dates
 
-            ss, data, dates = self.supermag.get_data_for_year(year)
+        """
+        if not isinstance(year, str):
+            year = str(year)
 
-            # choose random interval indexes for the substorms, gather the magnetometer sequences
-            # TODO: filter out substorms that aren't near midnight?
-            ss_dates = ss.index
-            self.total_substorms += ss_dates.shape[0]
-            ss_interval_index = np.cumsum(np.random.randint(1, self.Tp // self.ex_per_ss, (ss_dates.shape[0],
-                                                                                           self.ex_per_ss)), axis=1)
+        ss, data, dates = self.supermag.get_data_for_year(year)
 
-            ### POSITIVE EXAMPLES ###
-            # each of these produces the data chunks and masks for which storms should be included
-            if test:
-                mag_data_p, mag_mask = self.gather_mag_data(data, dates, ss_dates, self.Tm, end=2 * self.Tp,
-                                                            ss_interval_index=ss_interval_index)
-            else:
-                mag_data_p, mag_mask = self.gather_mag_data(data, dates, ss_dates, self.Tm,
-                                                            ss_interval_index=ss_interval_index)
-            self.n_no_mag_data += (~mag_mask).sum()
-            sw_data_p, sw_mask = self.gather_sw_data(ss_dates, ss_interval_index)
-            sme_data_p, sme_mask = self.gather_sme_data(ss_dates, self.ex_per_ss, test=test)
+        # TODO: filter out substorms that aren't near midnight?
+        ss_dates = ss.index
+        # randomly choose last mag minutes, has to be Tm < _ < last substorm date
+        last_substorm = dates[np.in1d(dates, ss_dates)][-1]  # last substorm present in mag data
+        prediction_times = np.sort(np.random.choice(np.arange(self.Tw + 1, np.argmax(last_substorm == dates)),
+                                                    self.ex_per_year, False))
+        time_diff = (ss_dates[None, :] - dates[prediction_times, None]) / 60e9
+        selected_ss_index = np.argmin(np.where(time_diff.astype(int) > 0, time_diff, 99999999), axis=1)
+        selected_ss_dates = ss_dates[selected_ss_index]
+        y = ((selected_ss_dates - dates[prediction_times]) / 60e9).astype(int)
 
-            # produce the mask to remove substorms not in the region
-            rcheck = self.region_check(ss['MLT'].values, data[:, :, 0], dates, ss_dates)
-            self.n_out_of_region += (~rcheck).sum()
-            # combine all the masks
-            p_mask = mag_mask * sw_mask * sme_mask * rcheck
-            self.kept_storms += p_mask.sum()
-            # expand masks for n examples per substorm
-            p_mask_ext = np.stack([p_mask] * self.ex_per_ss, axis=1).ravel()
-            ss_dates_p = np.stack([ss_dates] * self.ex_per_ss, axis=1).ravel()[p_mask_ext]
-            # filter the data
-            mag_data_p = mag_data_p[p_mask_ext]  # Magnetometer Input
-            sw_data_p = sw_data_p[p_mask_ext]  # Solar Wind Input
+        self.total_substorms += ss_dates.shape[0]
 
-            sme_data_p = sme_data_p[p_mask_ext]  # Strength Output
-            ss_interval_index_p = ss_interval_index.ravel()[p_mask_ext]  # Minutes Away
-            ss_location_p = np.stack([ss[['MLT', 'MLAT']].values[p_mask]] * self.ex_per_ss).reshape(
-                (-1, 2))  # Substorm Location
-            y_p = np.ones(np.sum(p_mask_ext), dtype=bool)  # Label Output
+        ### POSITIVE EXAMPLES ###
+        # each of these produces the data chunks and masks for which storms should be included
+        mag_data, mag_mask = self.gather_mag_data(data, dates, prediction_times)
+        self.n_no_mag_data += (~mag_mask).sum()
+        sw_data, sw_mask = self.gather_sw_data(dates[prediction_times])
+        sme_data, sme_mask = self.gather_sme_data(selected_ss_dates)
 
-            n_ss_examples = p_mask_ext.sum()
+        # combine all the masks
+        mask = mag_mask * sw_mask * sme_mask
+        self.kept_storms += mask.sum()
+        # filter the data
+        mag_data = mag_data[mask]  # Magnetometer Input
+        sw_data = sw_data[mask]  # Solar Wind Input
 
-            ### NEGATIVE EXAMPLES ###
-            mlt = data[:, :, 0]
-            finmask = np.isfinite(mlt)
-            finmask[finmask] *= mlt[finmask] > 12
-            mlt[finmask] -= 24
-            # restrict negative examples to where the region is near midnight (masking in mag time)
-            mask = np.logical_and(np.nanmin(mlt, axis=0) < 2, np.nanmax(mlt, axis=0) > -2)
-            # restrict negative examples to where there isn't a substorm in the next Tp minutes
-            ss_index = np.argwhere(np.in1d(dates, ss_dates))[:, 0]
-            mask[np.ravel(ss_index[:, None] - np.arange(self.Tp)[None, :])] = False
-            possible_dates = dates[mask]
-            negative_dates = possible_dates[
-                np.cumsum(np.random.randint(self.Tm, possible_dates.shape[0] // n_ss_examples,
-                                            n_ss_examples))]
+        sme_data = sme_data[mask]  # Strength Output
+        ss_location = np.stack(ss[['MLT', 'MLAT']].values[selected_ss_index[mask]]).reshape((-1, 2))  # Substorm Location
 
-            if test:
-                mag_data_n, mag_mask = self.gather_mag_data(data, dates, negative_dates, self.Tm, end=2 * self.Tp)
-            else:
-                mag_data_n, mag_mask = self.gather_mag_data(data, dates, negative_dates, self.Tm)
-            sw_data_n, sw_mask = self.gather_sw_data(negative_dates)
-            sme_data_n, sme_mask = self.gather_sme_data(negative_dates, test=test)
-            # mask over examples
-            n_mask = mag_mask * sw_mask * sme_mask
-            ss_dates_n = negative_dates[n_mask]
-            # filter the data
-            mag_data_n = mag_data_n[n_mask]  # Magnetometer Input
-            sw_data_n = sw_data_n[n_mask]  # Solar Wind Input
-            sme_data_n = sme_data_n[n_mask]  # Strength Output
-            ss_interval_index_n = np.ones(n_mask.sum()) * -1  # Minutes Away
-            ss_location_n = np.ones((n_mask.sum(), 2)) * -1  # Substorm Location
-            y_n = np.zeros(np.sum(n_mask), dtype=bool)  # Label Output
+        return mag_data, sw_data, y, sme_data, ss_location, ss_dates
 
-            # stack positive and negative examples
-            mag_data = np.concatenate((mag_data_p, mag_data_n), axis=0)
-            sw_data = np.concatenate((sw_data_p, sw_data_n), axis=0)
-            y = np.concatenate((y_p, y_n), axis=0)
-            sme_data = np.concatenate((sme_data_p, sme_data_n), axis=0)
-            ss_interval_index = np.concatenate((ss_interval_index_p, ss_interval_index_n), axis=0)
-            ss_location = np.concatenate((ss_location_p, ss_location_n), axis=0)
-            ss_dates = np.concatenate((ss_dates_p, ss_dates_n), axis=0)
+    @staticmethod
+    def region_check(ss_mlt, mag_mlt, dates, ss_dates):
+        # TODO: This doesn't work for this yet
+        # TODO: Use MLAT as well
+        rcheck = np.in1d(ss_dates, dates)
+        ss_index = np.ones(rcheck.shape[0], dtype=int) * -1
+        ss_index[rcheck] = np.argwhere(np.in1d(dates, ss_dates))[:, 0]
+        mag_mlt_windows = mag_mlt[:, ss_index[:, None] + np.arange(-10, 11)]
+        span = np.nanmax(mag_mlt_windows, axis=(0, 2)) - np.nanmin(mag_mlt_windows, axis=(0, 2))
+        finmask = np.isfinite(mag_mlt_windows)
+        finmask[finmask] *= mag_mlt_windows[finmask] > 12
+        mask = finmask * (span[None, :, None] > 12)
+        mag_mlt_windows[mask] -= 24
+        mask = (span > 12) * (ss_mlt > 12)
+        ss_mlt[mask] -= 24
+        rcheck *= (ss_mlt > np.nanmin(mag_mlt_windows, axis=(0, 2))) * (
+                    ss_mlt < np.nanmax(mag_mlt_windows, axis=(0, 2)))
+        return rcheck
 
-            return mag_data, sw_data, y, sme_data, ss_interval_index, ss_location, ss_dates
+    def gather_mag_data(self, data, dates, prediction_times, end=0):
+        ind = prediction_times[:, None] + np.arange(-self.Tm, end)[None, :]
+        mask = np.all((np.diff(dates[ind], axis=1) / 60e9).astype(int) == 1, axis=1)
+        mag_data = data[:, ind].transpose(1, 0, 2, 3)
+        return mag_data, mask
 
-        @staticmethod
-        def region_check(ss_mlt, mag_mlt, dates, ss_dates):
-            # TODO: Use MLAT as well
-            rcheck = np.in1d(ss_dates, dates)
-            ss_index = np.ones(rcheck.shape[0], dtype=int) * -1
-            ss_index[rcheck] = np.argwhere(np.in1d(dates, ss_dates))[:, 0]
-            mag_mlt_windows = mag_mlt[:, ss_index[:, None] + np.arange(-10, 11)]
-            span = np.nanmax(mag_mlt_windows, axis=(0, 2)) - np.nanmin(mag_mlt_windows, axis=(0, 2))
-            finmask = np.isfinite(mag_mlt_windows)
-            finmask[finmask] *= mag_mlt_windows[finmask] > 12
-            mask = finmask * (span[None, :, None] > 12)
-            mag_mlt_windows[mask] -= 24
-            mask = (span > 12) * (ss_mlt > 12)
-            ss_mlt[mask] -= 24
-            rcheck *= (ss_mlt > np.nanmin(mag_mlt_windows, axis=(0, 2))) * (
-                        ss_mlt < np.nanmax(mag_mlt_windows, axis=(0, 2)))
-            return rcheck
+    def gather_sw_data(self, dates):
+        mask = np.in1d(dates, self.supermag.solar_wind.index)
+        ind = np.argwhere(np.in1d(self.supermag.solar_wind.index, dates)) + np.arange(-self.Tw, 0)
+        sw_data = self.supermag.solar_wind.values[ind]
+        mask[mask] = np.all((np.diff(self.supermag.solar_wind.index[ind], axis=1) / 60e9).astype(int) == 1, axis=1)
+        return sw_data, mask
 
-        @staticmethod
-        def gather_mag_data(data, dates, ss_dates, Tm, end=0, ss_interval_index=0):
-            mask = np.in1d(ss_dates, dates)
-            ss_index = np.ones(mask.shape[0], dtype=int) * -1
-            ss_index[mask] = np.argwhere(np.in1d(dates, ss_dates))[:, 0]
-            mask *= ss_index > Tm
-            mag_interval_end = np.ravel(ss_index[:, None] - ss_interval_index)  # n_substorms x ex_per_ss
-            # MLT - MLAT - N - E - Z
-            mag_data = np.transpose(data[:, mag_interval_end[:, None] + np.arange(-Tm, end)[None, :], :], (1, 0, 2, 3))
-            return mag_data, mask
-
-        def gather_sw_data(self, ss_dates, ss_interval_index=0):
-            mask = np.in1d(ss_dates, self.supermag.solar_wind.index)
-            ss_index = np.ones(mask.shape[0], dtype=int) * -1
-            ss_index[mask] = np.argwhere(np.in1d(self.supermag.solar_wind.index, ss_dates))[:, 0]
-            mask *= ss_index > self.Tw
-            sw_interval_end = np.ravel(ss_index[:, None] - ss_interval_index)
-            sw_data = self.supermag.solar_wind.values[sw_interval_end[:, None] + np.arange(-self.Tw, 0)[None, :], :]
-            return sw_data, mask
-
-        def gather_sme_data(self, ss_dates, ex_per_ss=1, test=False):
-            mask = np.in1d(ss_dates, self.supermag.sme.index)
-            ss_index = np.ones(mask.shape[0], dtype=int) * -1
-            j = np.argwhere(np.in1d(self.supermag.sme.index, ss_dates))[:, 0]
-            ss_index[mask] = j
-            ss_index = np.stack([ss_index] * ex_per_ss, axis=1).ravel()
-            if test:
-                sme = self.supermag.sme.values
-                extension = ss_index.max() + 2 * self.Tp + 1 - sme.shape[0]
-                if extension > 0:
-                    sme = np.concatenate((sme, np.nan * np.ones((extension, sme.shape[1]))), axis=0)
-                sme_data = sme[ss_index[:, None] + np.arange(-self.Tm, 2 * self.Tp)[None, :]]
-            else:
-                sme_data_idx = np.argmin(
-                    self.supermag.sme['SML'].values[ss_index[:, None] + np.arange(0, self.sme_window)[None, :]],
-                    axis=1)
-                sme_data = self.supermag.sme.iloc[ss_index + sme_data_idx].values
-            return sme_data, mask
+    def gather_sme_data(self, ss_dates, end=None):
+        mask = np.in1d(ss_dates, self.supermag.sme.index)
+        unique_ss_dates, inv = np.unique(ss_dates[mask], return_inverse=True)
+        ss_index = np.ones(mask.shape[0], dtype=int) * -1
+        j = np.argwhere(np.in1d(self.supermag.sme.index, ss_dates))[:, 0]
+        ss_index[mask] = j[inv]
+        if end is not None:
+            sme = self.supermag.sme.values
+            extension = ss_index.max() + end - sme.shape[0]
+            if extension > 0:
+                sme = np.concatenate((sme, np.nan * np.ones((extension, sme.shape[1]))), axis=0)
+            sme_data = sme[ss_index[:, None] + np.arange(-self.Tm, end)[None, :]]
+        else:
+            sme_data_idx = np.argmin(
+                self.supermag.sme['SML'].values[ss_index[:, None] + np.arange(0, self.sme_window)[None, :]], axis=1)
+            sme_data = self.supermag.sme.iloc[ss_index + sme_data_idx].values
+        return sme_data, mask
 
 
 if __name__ == "__main__":
@@ -674,11 +604,11 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     REGION = [-130, 45, -60, 70]
-    supermag_data = SupermagData(region=REGION)
+    supermag_data = SupermagData()
 
     # output fn should be a npz file
-    supermag_dataset = BinaryClassificationDataset(args, supermag_data, output_fn="TEST_DATASET.npz")
+    supermag_dataset = RegressionDataset(supermag_data, args.Tm, args.Tw, 100, output_fn="TEST_DATASET.npz")
 
     np.random.seed(111)
 
-    supermag_dataset.run(range(2000, 2002), range(2006, 2008))
+    supermag_dataset.run(range(1990, 2014), range(2014, 2019))
