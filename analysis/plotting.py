@@ -116,6 +116,33 @@ def plot_map_and_stations(fig, gridspec, station_locations, station_names, stati
         map_ax.add_feature(Nightshade(date, alpha=0.2))
 
 
+def plot_sme(sme, ss_index):
+    # SME, SMU, -SML
+    fig, ax = plt.subplots(nrows=3, ncols=1, sharex=True)
+    ax[0].plot(sme[:, 0], label='SME')
+    ax[0].plot(-1 * sme[:, 1], label='-1 * SML')
+    ax[0].plot(sme[:, 2], label='SMU')
+    ax[0].axvline(ss_index, linestyle='--')
+    ax[0].set_ylabel("nT")
+    ax[0].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+    ax[0].legend()
+
+    # location stuff
+    ax[1].set_ylabel('MLAT')
+    ax[1].plot(sme[:, 3], label='SML MLAT')
+    ax[1].plot(sme[:, 4], label='SMU MLAT')
+    ax[1].axvline(ss_index, linestyle='--')
+    ax[1].tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
+    ax[1].legend()
+
+    ax[2].plot(sme[:, 5], label='SML MLT')
+    ax[2].plot(sme[:, 6], label='SMU MLT')
+    ax[2].set_ylabel('MLT')
+    ax[2].axvline(ss_index, linestyle='--')
+    ax[2].set_xlabel("minutes")
+    ax[2].legend()
+
+
 def plot_filter_output(index, station, layer=3):
     filter_func = K.function(self.model.inputs, [self.model.layers[layer].output])
     n_filters = self.model.layers[layer].output.shape[-1].value
@@ -145,36 +172,6 @@ def plot_filter_output(index, station, layer=3):
             ax.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
         else:
             ax.set_xlabel("minutes")
-
-
-def plot_sme(index):
-    # SME, SMU, -SML
-    plt.figure()
-    plt.suptitle("{}".format(index))
-    plt.subplot(311)
-    plt.plot(self.sme[index, :, 0], label='SME')
-    plt.plot(-1 * self.sme[index, :, 1], label='-1 * SML')
-    plt.plot(self.sme[index, :, 2], label='SMU')
-    plt.axvline(self.ss_index[index], linestyle='--')
-    plt.ylabel("nT")
-    plt.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
-    plt.legend()
-
-    # location stuff
-    plt.subplot(312)
-    plt.ylabel('MLAT')
-    plt.plot(self.sme[index, :, 3], label='SML MLAT')
-    plt.plot(self.sme[index, :, 4], label='SMU MLAT')
-    plt.axvline(self.ss_index[index], linestyle='--')
-    plt.tick_params(axis='x', which='both', bottom=False, top=False, labelbottom=False)
-    plt.legend()
-    plt.subplot(313)
-    plt.plot(self.sme[index, :, 5], label='SML MLT')
-    plt.plot(self.sme[index, :, 6], label='SMU MLT')
-    plt.ylabel('MLT')
-    plt.axvline(self.ss_index[index], linestyle='--')
-    plt.xlabel("minutes")
-    plt.legend()
 
 
 def plot_cam(index):
