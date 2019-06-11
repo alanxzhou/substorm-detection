@@ -39,9 +39,9 @@ import seaborn as sns
 from skimage import transform
 import pandas as pd
 
-from CNN import models
-import utils
-from analysis import plotting
+import models
+from detection import utils
+from detection.analysis import plotting
 
 sns.set()
 

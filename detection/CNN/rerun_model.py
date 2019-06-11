@@ -1,7 +1,6 @@
-from CNN import models
-import utils
+from detection import utils
 import numpy as np
-from RNN import rnn_models
+from detection.RNN import rnn_models
 
 ########################################################################################################################
 # CONFIGURATION

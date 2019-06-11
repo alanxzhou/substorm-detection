@@ -1,7 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from CNN import models
-import utils
+import models
+from detection import utils
+
 plt.style.use('ggplot')
 
 

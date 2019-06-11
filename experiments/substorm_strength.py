@@ -7,10 +7,8 @@ between the substorm strength and its predictability.
 """
 
 import numpy as np
-import pandas as pd
-import xarray as xr
 import keras
-import utils
+from detection import utils
 import matplotlib.pyplot as plt
 plt.style.use("ggplot")
 

@@ -1,6 +1,6 @@
 import numpy as np
-from CNN import models
-import utils
+import models
+from detection import utils
 import keras.backend as K
 import sklearn.metrics as metrics
 import pickle

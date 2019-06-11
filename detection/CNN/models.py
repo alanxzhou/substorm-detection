@@ -1,7 +1,6 @@
 import keras
-from CNN import blocks
-import utils
-import keras.backend as K
+import blocks
+from detection import utils
 
 
 def train_cnn(X_train, y_train, X_val, y_val, params):

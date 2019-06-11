@@ -1,8 +1,8 @@
 import keras
-from keras.layers import GRU, LSTM, SimpleRNN, Input, Dense, concatenate, Flatten, Conv1D, MaxPooling1D
+from keras.layers import GRU, LSTM, SimpleRNN, Input, Dense, concatenate
 from keras.models import Sequential, Model
 import numpy as np
-import utils
+from detection import utils
 
 
 def train_functional_rnn_combined(X_train, y_train, X_val, y_val, params):

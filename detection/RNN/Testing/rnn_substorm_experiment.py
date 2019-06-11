@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import os.path
-import utils
+from detection import utils
 import rnn_models
 
 
@@ -24,7 +23,7 @@ X_val, y_val = val
 X_test, y_test = test
 
 X_train, X_val, X_test = utils.rnn_format_x([X_train, X_val, X_test])
-y_train, y_val, y_test = utils.rnn_format_y([y_train,y_val,y_test])
+y_train, y_val, y_test = utils.rnn_format_y([y_train, y_val, y_test])
 
 params = {
     'epochs': 20,

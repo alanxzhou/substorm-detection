@@ -1,10 +1,9 @@
-from CNN import models
-import utils
+from detection import utils
 import numpy as np
 import keras
 import matplotlib.pyplot as plt
 import keras.backend as K
-from RNN import rnn_models
+from detection.RNN import rnn_models
 
 # CONFIGURATION
 TRAIN = True

@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
-from analysis.visualizations import Visualizer
+from detection.analysis.visualizations import Visualizer
 from sklearn.cluster import AgglomerativeClustering
 import keras
 import numpy as np
-from analysis import nn_vis
+from detection.analysis import nn_vis
 
 TRAIN = False
 

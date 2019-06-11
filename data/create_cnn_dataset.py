@@ -22,13 +22,14 @@ NOTE: NaNs are replaced with zeros
 import numpy as np
 import pandas as pd
 import xarray as xr
-import utils
+from detection import utils
 
 
 class SupermagDataset:
 
     def __init__(self, args, substorm_fn="substorms.csv", sme_fn="SME.csv", stations_fn="supermag_stations.csv",
-                 solar_wind_fn="solar_wind.pkl", output_fn=None, mag_fn_pattern="mag_data/mag_data_{}.nc"):
+                 solar_wind_fn="solar_wind.pkl", output_fn=None, mag_fn_pattern="mag_data/mag_data_{}.nc",
+                 use_strength=False, regression=False):
 
         self.Tm = args.Tm  # length of interval to use as input data
         self.Tp = args.Tp  # length of prediction interval
@@ -42,9 +43,15 @@ class SupermagDataset:
         self.output_fn = output_fn
         self.mag_fn_pattern = mag_fn_pattern
         if output_fn is None:
-            self.output_fn = "{}classes_data{}.npz".format(self.n_pos_classes + 1, self.Tm)
+            if not regression:
+                self.output_fn = "{}classes_data{}.npz".format(self.n_pos_classes + 1, self.Tm)
+            else:
+                self.output_fn = "{}classes_data{}.npz".format(self.Tm)
 
         self.substorms = self.open_csv(substorm_fn)
+
+        self.use_strength = use_strength
+        self.regression = regression
 
         self.sme = pd.read_csv(sme_fn, index_col=0)
         self.sme.index = pd.to_datetime(self.sme.index)

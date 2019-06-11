@@ -1,5 +1,5 @@
 import numpy as np
-from utils import confusion_mtx
+from detection.utils import confusion_mtx
 from sklearn.linear_model import LogisticRegression
 
 
