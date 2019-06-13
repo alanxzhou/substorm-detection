@@ -535,8 +535,8 @@ class RegressionDataset:
         # filter the data
         mag_data = mag_data[mask]  # Magnetometer Input
         sw_data = sw_data[mask]  # Solar Wind Input
-
         sme_data = sme_data[mask]  # Strength Output
+        y = y[mask]
         ss_location = np.stack(ss[['MLT', 'MLAT']].values[selected_ss_index[mask]]).reshape((-1, 2))  # Substorm Location
 
         return mag_data, sw_data, y, sme_data, ss_location, ss_dates
