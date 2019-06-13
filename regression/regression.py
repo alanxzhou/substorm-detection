@@ -2,6 +2,7 @@ import keras
 from detection import utils
 from detection.CNN.models import _basic_1d_net, _basic_2d_net, _residual_1d_net, _residual_2d_net
 import numpy as np
+import pickle
 
 def train_residual_cnn(X_train, y_train, X_val, y_val, params):
     """ X_train: [Mag_data, SW_data]
@@ -79,7 +80,7 @@ if __name__ == "__main__":
     y_val = data['y_test']
 
     batch_size = 16
-    epochs = 1
+    epochs = 20
     mag_T0 = 64
     sw_T0 = 240
     params = {'batch_size': batch_size, 'epochs': epochs, 'verbose': 2,
@@ -95,3 +96,7 @@ if __name__ == "__main__":
               'sw_downsampling_strides': 4, 'sw_kernel_size': 7, 'sw_fl_filters': 16,
               'sw_fl_strides': 3, 'sw_fl_kernel_size': 15, 'sw_type': 'residual'}
     hist, mod = train_residual_cnn(X_train, y_train, X_val, y_val, params)
+    keras.models.save_model(mod, "regression_mod1.h5")
+    pickle.dump(hist, open("regression_hist1.pkl", "wb"))
+
+
