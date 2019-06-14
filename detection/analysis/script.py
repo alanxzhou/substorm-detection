@@ -1,13 +1,16 @@
 import matplotlib.pyplot as plt
 from detection.analysis.visualizations import Visualizer
 from sklearn.cluster import AgglomerativeClustering
+import keras.backend as K
 import keras
 import numpy as np
-from detection.analysis import nn_vis
+from vis import visualization
+from vis import grad_modifiers
+from vis import input_modifiers
 
 TRAIN = False
 
-data_fn = "../data/2classes_data128.npz"
+data_fn = "../../data/2classes_data128.npz"
 train_val_split = .15
 model_file = "../CNN/saved models/final_cnn_model.h5"
 
@@ -33,60 +36,48 @@ select_layer = 7
 layer = relu_layers[select_layer]
 activations = visualizer.get_layer_output(layer, visualizer.test_data)
 cov = np.corrcoef(activations.reshape((-1, 32)).T)
-i = -1
 clust = AgglomerativeClustering(n_clusters=5, linkage="average", affinity="precomputed")
 clust.fit(np.exp(-1 * cov))
 clusters = np.argsort(clust.labels_)
 
-fig = plt.figure(figsize=(12, 12))
-plt.pcolormesh(cov[clusters][:, clusters], cmap='coolwarm')
-plt.xticks(np.arange(32), clusters)
-plt.yticks(np.arange(32), clusters)
-plt.savefig("C:\\Users\\Greg\\Desktop\\semeter_meeting\\correlation.png")
-plt.clf()
-plt.close(fig)
+# fig = plt.figure(figsize=(12, 12))
+# plt.pcolormesh(cov[clusters][:, clusters], cmap='coolwarm')
+# plt.xticks(np.arange(32), clusters)
+# plt.yticks(np.arange(32), clusters)
+# plt.savefig("C:\\Users\\Greg\\Desktop\\semeter_meeting\\correlation.png")
+# plt.clf()
+# plt.close(fig)
 
 # for each filter:
 #   optimize for highly activating input (feature visualization)
 #   get examples (15 or so) of highly activating input data
 #   for 2 or 3 different neurons, get examples of highly activating inputs, look to see what features are translated
+filt = 15
+tensor = -1 * visualizer.model.layers[27].output[0, 20, 5, filt]
+for i in range(5):
+    img = visualization.visualize_relationship(visualizer.model.input[0], tensor, max_iter=1000,
+                                               seed_input=(np.random.rand(85, 96, 3)) * 5 - 80,
+                                               grad_modifier=grad_modifiers.blur_size(3))
 
-steps = 2000
+    fig, ax = plt.subplots(nrows=3, ncols=1, sharex=True, sharey=True, constrained_layout=True)
+    for channel in range(3):
+        ax[channel].pcolormesh(img[36:50, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+        cb = ax[channel].pcolormesh(img[36:50, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+        ax[channel].pcolormesh(img[36:50, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+    fig.colorbar(cb, ax=ax.ravel().tolist())
 
-feature_vis = nn_vis.feature_visualization(layer.output[:, 20, 2, 4], visualizer.model.inputs[0], steps)
-plt.figure()
-plt.pcolormesh(feature_vis[0, :, :, 0], cmap='gray')
-feature_vis = nn_vis.feature_visualization(layer.output[:, 20, 5, 4], visualizer.model.inputs[0], steps)
-plt.figure()
-plt.pcolormesh(feature_vis[0, :, :, 0], cmap='gray')
-feature_vis = nn_vis.feature_visualization(layer.output[:, 20, 8, 4], visualizer.model.inputs[0], steps)
-plt.figure()
-plt.pcolormesh(feature_vis[0, :, :, 0], cmap='gray')
+max_vals = activations[:, 20, 5, filt]
+th = np.percentile(max_vals, 95)
+select_examples = max_vals >= th
+input_data = [x[select_examples] for x in visualizer.test_data]
+data = input_data[0]
+for i in np.random.choice(np.arange(data.shape[0]), 5):
+    fig, ax = plt.subplots(3, 1, sharex=True, constrained_layout=True)
+    for channel in range(3):
+        img = data[i, 36:50]
+        ax[channel].pcolormesh(img[:, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+        cb = ax[channel].pcolormesh(img[:, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+        ax[channel].pcolormesh(img[:, :, channel], cmap='coolwarm', vmin=img.min(), vmax=img.max())
+    fig.colorbar(cb, ax=ax.ravel().tolist())
+
 plt.show()
-
-
-# for filt in range(activations.shape[-1]):
-#     print(filt)
-#     max_vals = activations[:, :, :, filt].max(axis=(1, 2))
-#     th = np.percentile(max_vals, 90)
-#     select_examples = max_vals >= th
-#     input_data = [x[select_examples] for x in visualizer.test_data]
-#     locs = np.argwhere(activations[select_examples, :, :, filt] ==
-#                        max_vals[select_examples, None, None]).astype(np.int32)
-#     fig, ax = plt.subplots(3, 5, sharex=True, constrained_layout=True, figsize=(18, 10))
-#     fig.suptitle("filter {}, weight: {:5.3f}".format(filt, dense_weights[filt]))
-#     for i, j in enumerate(np.random.choice(np.arange(locs.shape[0]), 15, False)):
-#         grads = visualizer.get_gradients(relu_layers[select_layer].output[:, locs[j, 1], locs[j, 2], filt],
-#                                          visualizer.model.inputs[0], [x[j, None] for x in input_data])
-#         fov = np.any(grads[0] != 0, axis=2)
-#         rows = np.any(fov, axis=1)
-#         cols = np.any(fov, axis=0)
-#         rmin, rmax = np.where(rows)[0][[0, -1]]
-#         cmin, cmax = np.where(cols)[0][[0, -1]]
-#         data = input_data[0][j, rmin:rmax, cmin:cmax]
-#         ax[i // 5, i % 5].plot(data[:, :, 0].T, 'r')
-#         ax[i // 5, i % 5].plot(data[:, :, 1].T, 'b')
-#         ax[i // 5, i % 5].plot(data[:, :, 2].T, 'g')
-#     plt.savefig("C:\\Users\\Greg\\Desktop\\semeter_meeting\\{}.png".format(filt))
-#     plt.close(fig)
-#     plt.clf()

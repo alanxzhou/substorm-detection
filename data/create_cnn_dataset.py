@@ -26,6 +26,36 @@ from detection import utils
 
 
 class SupermagData:
+    """
+    Ultimately I want this to hold a "master" datetime index, sampled at the shortest period in the data (resampled
+    so everything lines up perfectly? future feature perhaps) as well as mappings from each of the data sources'
+    time indices to the master index. This will have a boolean mask for each data source to indicate whether that data
+    source has data at a particular index in the "master" index. This will have functions to extract aligned data from
+    one or all sources.
+
+    To initialize, just pass in actual data in the form of xarray datasets / dataarrays.
+
+    What about mag data, which will have too much data to hold at once?
+
+    What if I had a subclass called 'DataSource' which will contain files, functions to read the data, functions to
+    extract that data? Could be pretty general because solar wind, magnetic indices are both just dataframes with data
+    every minute, opening and accessing the data would be identical.
+
+    The other case would be where the dataset is too large to fit in memory and so reading / accessing the data
+    would have to happen one file at a time.
+
+    Would the substorm list need its own because it doesn't hold data from consecutive time steps?
+
+    The collection class needs to be able to ask each datasource for data of a certain length
+
+    Could this be general enough to just get a bunch of files? What information is required for each file?
+        - filename - how should it be read? take from extension
+        - file type
+        - date range of file
+        - name of data
+        -
+
+    """
 
     def __init__(self, substorm_fn="substorms.csv", sme_fn="SME.csv", stations_fn="supermag_stations.csv",
                  solar_wind_fn="solar_wind.pkl", mag_fn_pattern="mag_data/mag_data_{}.nc", region=None):
@@ -522,7 +552,6 @@ class RegressionDataset:
 
         self.total_substorms += ss_dates.shape[0]
 
-        ### POSITIVE EXAMPLES ###
         # each of these produces the data chunks and masks for which storms should be included
         mag_data, mag_mask = self.gather_mag_data(data, dates, prediction_times)
         self.n_no_mag_data += (~mag_mask).sum()
@@ -568,9 +597,11 @@ class RegressionDataset:
 
     def gather_sw_data(self, dates):
         mask = np.in1d(dates, self.supermag.solar_wind.index)
-        ind = np.argwhere(np.in1d(self.supermag.solar_wind.index, dates)) + np.arange(-self.Tw, 0)
+        ind = np.zeros_like(mask, dtype=int)
+        ind[mask] = np.argwhere(np.in1d(self.supermag.solar_wind.index, dates))[:, 0]
+        ind = ind[:, None] + np.arange(-self.Tw, 0)
         sw_data = self.supermag.solar_wind.values[ind]
-        mask[mask] = np.all((np.diff(self.supermag.solar_wind.index[ind], axis=1) / 60e9).astype(int) == 1, axis=1)
+        mask[mask] = np.all((np.diff(self.supermag.solar_wind.index[ind[mask]], axis=1) / 60e9).astype(int) == 1, axis=1)
         return sw_data, mask
 
     def gather_sme_data(self, ss_dates, end=None):
@@ -607,8 +638,8 @@ if __name__ == "__main__":
     supermag_data = SupermagData()
 
     # output fn should be a npz file
-    supermag_dataset = RegressionDataset(supermag_data, args.Tm, args.Tw, 100, output_fn="TEST_DATASET.npz")
+    supermag_dataset = RegressionDataset(supermag_data, args.Tm, args.Tw, 100)
 
     np.random.seed(111)
 
-    supermag_dataset.run(range(1990, 2014), range(2014, 2019))
+    supermag_dataset.run(range(1999, 2014), range(2014, 2019))

@@ -39,7 +39,7 @@ import seaborn as sns
 from skimage import transform
 import pandas as pd
 
-import models
+from detection.CNN import models
 from detection import utils
 from detection.analysis import plotting
 

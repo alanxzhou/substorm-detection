@@ -1,5 +1,5 @@
 import keras
-import blocks
+from detection.CNN import blocks
 from detection import utils
 
 
