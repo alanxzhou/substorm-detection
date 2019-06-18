@@ -23,6 +23,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from detection import utils
+import pysupmag as psm
 
 
 class SupermagData:
@@ -623,23 +624,97 @@ class RegressionDataset:
         return sme_data, mask
 
 
-if __name__ == "__main__":
-    import argparse
+def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128, Tw=196, Tsme=20, nan_th=.8):
+    import glob
+    if output_fn is None:
+        output_fn = "regression_data{}.npz".format(n_train + n_test)
 
-    parser = argparse.ArgumentParser(description='Create a substorm dataset')
-    parser.add_argument('--Tp', nargs=1, default=30, type=int, help="prediction interval")
-    parser.add_argument('--Tm', nargs=1, default=128, type=int, help="Mag data input interval")
-    parser.add_argument('--Tw', nargs=1, default=256, type=int, help="Solar wind data input interval")
-    parser.add_argument('--posclasses', nargs=1, default=1, type=int, help="Number of positive classes")
-    parser.add_argument('--experss', nargs=1, default=1, type=int, help="Examples per substorm")
+    print("create DataSource objects")
+    print("Solar Wind")
+    solar_wind_fn = data_dir + "solar_wind.pkl"
+    data = pd.read_pickle(solar_wind_fn)
+    sw = psm.DataSource("solar_wind", data.values, data.index)
 
-    args = parser.parse_args()
-    REGION = [-130, 45, -60, 70]
-    supermag_data = SupermagData()
+    print("SME")
+    sme_fn = data_dir + "SME.csv"
+    data = pd.read_csv(sme_fn, index_col=0)
+    sme = psm.DataSource("sme", data.values, pd.to_datetime(data.index))
 
-    # output fn should be a npz file
-    supermag_dataset = RegressionDataset(supermag_data, args.Tm, args.Tw, 100)
+    print("Substorms")
+    substorm_fn = data_dir + "substorms.csv"
+    data = pd.read_csv(substorm_fn)
+    data.index = pd.to_datetime(data['Date_UTC'])
+    data = data.drop(columns=['Unnamed: 0', 'Date_UTC'])
+    substorms = psm.DataSource("substorms", data.values, data.index)
 
-    np.random.seed(111)
+    print("Mag")
+    paths = glob.glob(data_dir + "mag_data/mag_data*.nc")
+    mag = psm.DataSource.from_xarray_files("mag", paths)
 
-    supermag_dataset.run(range(1999, 2014), range(2014, 2019))
+    print("Collection")
+    collection = psm.DataCollection(sources=[mag, sw, sme, substorms])
+
+    # randomly select that many datetime indices from master list
+    print("randomly select times")
+    example_date_idx = np.sort(np.random.choice(np.arange(collection.dates.shape[0], dtype=int),
+                                                n_train + n_test, replace=False))
+
+    # grab corresponding data and targets
+    # mag data is from t0 - Tm : t0
+    print("mag data")
+    mag_data, mag_mask = mag.get_data(example_date_idx, before=Tm)
+
+    # solar wind data is from t0 - Tw : t0
+    print("sw data")
+    sw_data, sw_mask = sw.get_data(example_date_idx, before=Tw)
+
+    # target is t_next_substorm - t0
+    print("targets")
+    ss_master_idx, ss_idx = substorms.get_next(example_date_idx)  # returns dates? or indices?
+    targets = ss_master_idx - example_date_idx
+
+    # sme is lowest sml over t_next_substorm : t_next_substorm + Tsme
+    print("sme")
+    sme_data, sme_mask = sme.get_data(ss_idx, after=Tsme)
+    sme_data = sme_data[:, :, 1].min(axis=1)
+
+    # mask out examples with missing data
+    mask = mag_mask * sw_mask * sme_mask
+    mag_data = mag_data[mask]
+    targets = targets[mask]
+    sw_data = sw_data[mask]
+    sme_data = sme_data[mask]
+
+    # figure out good ordering for the stations (rows)
+    # remove stations with no data in the dataset
+    station_mask = ~(np.mean(np.isnan(mag_data), axis=(0, 1, 3)) > nan_th)
+    mag_data = mag_data[:, :, station_mask, :]
+    print("Annealing...")
+    stations = list(np.array(mag.data.stations)[station_mask])
+    station_fn = "supermag_stations.csv"
+    all_stations = pd.read_csv(station_fn, index_col=0, usecols=[0, 1, 2, 5])
+    stations = all_stations.loc[stations]
+    station_locations = stations.values[:, :2]
+    station_locations[station_locations > 180] -= 360
+    dists = utils.distance_matrix(station_locations)
+    dists[np.isnan(dists)] = 0
+
+    sa = utils.SimAnneal(station_locations, dists, stopping_iter=100000000)
+    sa.anneal()
+    mag_data = mag_data[:, :, sa.best_solution, :]
+
+    # save the dataset
+    np.savez(output_fn, **{"mag_data_train": mag_data[:n_train], "mag_data_test": mag_data[n_train:],
+                           "sw_data_train": sw_data[:n_train], "sw_data_test": sw_data[n_train:],
+                           "y_train": targets[:n_train], "y_test": targets[n_train:],
+                           "sme_data_train": sme_data[:n_train], "sme_data_test": sme_data[n_train:],
+                           "ss_location_train": substorms.data[ss_idx[:n_train]],
+                           "ss_location_test": substorms.data[ss_idx[n_train:]]})
+
+
+# ----------------------------------------------------------------------------------------------------------------------
+# ------------------------------------------- SCRIPT -------------------------------------------------------------------
+# ----------------------------------------------------------------------------------------------------------------------
+np.random.seed(111)
+DATA_DIR = "C:/Users/Greg/code/substorm-detection/data/"
+create_regression_dataset(DATA_DIR, 10_000, 3_000)
