@@ -24,6 +24,7 @@ import pandas as pd
 import xarray as xr
 from detection import utils
 import pysupmag as psm
+import time
 
 
 class SupermagData:
@@ -626,6 +627,9 @@ class RegressionDataset:
 
 def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128, Tw=196, Tsme=20, nan_th=.8):
     import glob
+
+    START_TIME = time.time()
+
     if output_fn is None:
         output_fn = "regression_data{}.npz".format(n_train + n_test)
 
@@ -650,6 +654,7 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     print("Mag")
     paths = glob.glob(data_dir + "mag_data/mag_data*.nc")
     mag = psm.DataSource.from_xarray_files("mag", paths)
+    mag_stations = mag.data.stations
 
     print("Collection")
     collection = psm.DataCollection(sources=[mag, sw, sme, substorms])
@@ -663,10 +668,12 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     # mag data is from t0 - Tm : t0
     print("mag data")
     mag_data, mag_mask = mag.get_data(example_date_idx, before=Tm)
+    del mag
 
     # solar wind data is from t0 - Tw : t0
     print("sw data")
     sw_data, sw_mask = sw.get_data(example_date_idx, before=Tw)
+    del sw
 
     # target is t_next_substorm - t0
     print("targets")
@@ -676,9 +683,11 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     # sme is lowest sml over t_next_substorm : t_next_substorm + Tsme
     print("sme")
     sme_data, sme_mask = sme.get_data(ss_idx, after=Tsme)
+    del sme
     sme_data = sme_data[:, :, 1].min(axis=1)
 
     # mask out examples with missing data
+    print("masks")
     mask = mag_mask * sw_mask * sme_mask
     mag_data = mag_data[mask]
     targets = targets[mask]
@@ -690,9 +699,9 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     station_mask = ~(np.mean(np.isnan(mag_data), axis=(0, 1, 3)) > nan_th)
     mag_data = mag_data[:, :, station_mask, :]
     print("Annealing...")
-    stations = list(np.array(mag.data.stations)[station_mask])
     station_fn = "supermag_stations.csv"
     all_stations = pd.read_csv(station_fn, index_col=0, usecols=[0, 1, 2, 5])
+    stations = list(np.array(mag_stations)[station_mask])
     stations = all_stations.loc[stations]
     station_locations = stations.values[:, :2]
     station_locations[station_locations > 180] -= 360
@@ -710,6 +719,9 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
                            "sme_data_train": sme_data[:n_train], "sme_data_test": sme_data[n_train:],
                            "ss_location_train": substorms.data[ss_idx[:n_train]],
                            "ss_location_test": substorms.data[ss_idx[n_train:]]})
+
+    TIME_DIFF = time.time() - START_TIME
+    print("Total time: {} minutes, {} seconds".format(int(TIME_DIFF // 60), int(TIME_DIFF % 60)))
 
 
 # ----------------------------------------------------------------------------------------------------------------------
