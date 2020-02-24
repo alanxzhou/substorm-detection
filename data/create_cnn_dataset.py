@@ -625,7 +625,7 @@ class RegressionDataset:
         return sme_data, mask
 
 
-def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128, Tw=196, Tsme=20, nan_th=.8):
+def create_regression_dataset_raw(data_dir, n_train, n_test, output_fn=None, Tm=128, Tw=196, Tsme=20, nan_th=.8):
     import glob
 
     START_TIME = time.time()
@@ -665,6 +665,11 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
                                                 n_train + n_test, replace=False))
 
     # grab corresponding data and targets
+    # target is t_next_substorm - t0
+    print("targets")
+    ss_master_idx, ss_idx, target_mask = substorms.get_next(example_date_idx)  # returns dates? or indices?
+    targets = ss_master_idx - example_date_idx
+
     # mag data is from t0 - Tm : t0
     print("mag data")
     mag_data, mag_mask = mag.get_data(example_date_idx, before=Tm)
@@ -675,20 +680,15 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     sw_data, sw_mask = sw.get_data(example_date_idx, before=Tw)
     del sw
 
-    # target is t_next_substorm - t0
-    print("targets")
-    ss_master_idx, ss_idx = substorms.get_next(example_date_idx)  # returns dates? or indices?
-    targets = ss_master_idx - example_date_idx
-
     # sme is lowest sml over t_next_substorm : t_next_substorm + Tsme
     print("sme")
-    sme_data, sme_mask = sme.get_data(ss_idx, after=Tsme)
+    sme_data, sme_mask = sme.get_data(ss_master_idx, after=Tsme)
     del sme
     sme_data = sme_data[:, :, 1].min(axis=1)
 
     # mask out examples with missing data
     print("masks")
-    mask = mag_mask * sw_mask * sme_mask
+    mask = mag_mask * sw_mask * sme_mask * target_mask
     mag_data = mag_data[mask]
     targets = targets[mask]
     sw_data = sw_data[mask]
@@ -697,7 +697,7 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
     # figure out good ordering for the stations (rows)
     # remove stations with no data in the dataset
     station_mask = ~(np.mean(np.isnan(mag_data), axis=(0, 1, 3)) > nan_th)
-    mag_data = mag_data[:, :, station_mask, :]
+    mag_data = mag_data[:, :, station_mask, 2:]
     print("Annealing...")
     station_fn = "supermag_stations.csv"
     all_stations = pd.read_csv(station_fn, index_col=0, usecols=[0, 1, 2, 5])
@@ -729,4 +729,4 @@ def create_regression_dataset(data_dir, n_train, n_test, output_fn=None, Tm=128,
 # ----------------------------------------------------------------------------------------------------------------------
 np.random.seed(111)
 DATA_DIR = "C:/Users/Greg/code/substorm-detection/data/"
-create_regression_dataset(DATA_DIR, 10_000, 3_000)
+create_regression_dataset_raw(DATA_DIR, 10_000, 3_000)
